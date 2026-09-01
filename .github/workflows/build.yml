@@ -22,6 +22,19 @@ jobs:
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
 
+      - name: Allow Z-only probe homing for CNC
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("MarlinSource/Marlin/src/inc/Warnings.cpp")
+          s = p.read_text()
+          old = '#error "Z_SAFE_HOMING is recommended when homing with a probe. Enable Z_SAFE_HOMING or comment out this line to continue."'
+          new = '#warning "CNC mode: Z probe homing allowed at current X/Y without Z_SAFE_HOMING."'
+          if old not in s:
+              raise SystemExit("Expected Z_SAFE_HOMING check not found")
+          p.write_text(s.replace(old, new, 1))
+          PY
+
       - name: Apply Mini12864 individual LED feature
         run: |
           cp patches/mini12864_individual_leds.h MarlinSource/Marlin/src/feature/leds/mini12864_individual_leds.h
