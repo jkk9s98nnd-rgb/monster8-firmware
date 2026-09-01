@@ -22,6 +22,31 @@ jobs:
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
 
+      - name: Apply Mini12864 individual LED feature
+        run: |
+          cp patches/mini12864_individual_leds.h MarlinSource/Marlin/src/feature/leds/mini12864_individual_leds.h
+          cp patches/mini12864_individual_leds.cpp MarlinSource/Marlin/src/feature/leds/mini12864_individual_leds.cpp
+          cp patches/menu_led.cpp MarlinSource/Marlin/src/lcd/menu/menu_led.cpp
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('MarlinSource/Marlin/src/feature/leds/leds.cpp')
+          s = p.read_text()
+          anchor = '#include "leds.h"\n'
+          if 'mini12864_individual_leds.h' not in s:
+              s = s.replace(anchor, anchor + '#include "mini12864_individual_leds.h"\n', 1)
+          anchor2 = '  TERN_(LED_USER_PRESET_STARTUP, set_default());\n'
+          insert = '''  TERN_(LED_USER_PRESET_STARTUP, set_default());
+  #if ENABLED(MKS_MINI_12864_V3) && ENABLED(NEOPIXEL_LED)
+    mini12864IndividualLEDs.load();
+  #endif
+'''
+          if 'mini12864IndividualLEDs.load();' not in s:
+              if anchor2 not in s:
+                  raise SystemExit('LED setup patch anchor not found')
+              s = s.replace(anchor2, insert, 1)
+          p.write_text(s)
+          PY
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
