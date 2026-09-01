@@ -18,14 +18,6 @@ jobs:
           repository: MarlinFirmware/Marlin
           ref: 2.1.2.8
           path: MarlinSource
-          fetch-depth: 0
-
-      - name: Backport official BIQU MicroProbe support
-        working-directory: MarlinSource
-        run: |
-          git config user.name "Monster8 Builder"
-          git config user.email "builder@monster8.local"
-          git cherry-pick 204de723f1c08f83e281f0629b60822b334097ed
 
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
