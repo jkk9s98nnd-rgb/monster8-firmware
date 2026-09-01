@@ -5,8 +5,17 @@ root = Path('MarlinSource/Marlin')
 # 1) Add BIQU MicroProbe options to Configuration.h so config.ini can enable V2.
 p = root / 'Configuration.h'
 s = p.read_text()
-needle = """#if ENABLED(BD_SENSOR)\n  //#define BD_SENSOR_PROBE_NO_STOP // Probe bed without stopping at each probe point\n#endif\n\n// A probe that is deployed and stowed with a solenoid pin (SOL1_PIN)\n"""
-insert = """#if ENABLED(BD_SENSOR)\n  //#define BD_SENSOR_PROBE_NO_STOP // Probe bed without stopping at each probe point\n#endif\n\n/**\n * BIQU MicroProbe\n * A lightweight, solenoid-driven probe.\n * Also requires PROBE_ENABLE_DISABLE.\n */\n//#define BIQU_MICROPROBE_V1  // Triggers HIGH\n//#define BIQU_MICROPROBE_V2  // Triggers LOW\n\n// A probe that is deployed and stowed with a solenoid pin (SOL1_PIN)\n"""
+needle = "// A probe that is deployed and stowed with a solenoid pin (SOL1_PIN)\n"
+insert = """/**
+ * BIQU MicroProbe
+ * A lightweight, solenoid-driven probe.
+ * Also requires PROBE_ENABLE_DISABLE.
+ */
+//#define BIQU_MICROPROBE_V1  // Triggers HIGH
+//#define BIQU_MICROPROBE_V2  // Triggers LOW
+
+// A probe that is deployed and stowed with a solenoid pin (SOL1_PIN)
+"""
 if needle not in s:
     raise SystemExit('Configuration.h MicroProbe insertion point not found')
 p.write_text(s.replace(needle, insert, 1))
@@ -24,8 +33,20 @@ p.write_text(s.replace(old, new, 1))
 #    Keep M401/M402 motionless on this machine.
 p = root / 'src/module/probe.cpp'
 s = p.read_text()
-old = """  #if ANY(FIX_MOUNTED_PROBE, NOZZLE_AS_PROBE) && DISABLED(PAUSE_BEFORE_DEPLOY_STOW)\n    const bool z_raise_wanted = deploy;\n  #else\n    constexpr bool z_raise_wanted = true;\n  #endif\n"""
-new = """  #if ANY(BIQU_MICROPROBE_V1, BIQU_MICROPROBE_V2)\n    constexpr bool z_raise_wanted = false;\n  #elif ANY(FIX_MOUNTED_PROBE, NOZZLE_AS_PROBE) && DISABLED(PAUSE_BEFORE_DEPLOY_STOW)\n    const bool z_raise_wanted = deploy;\n  #else\n    constexpr bool z_raise_wanted = true;\n  #endif\n"""
+old = """  #if ANY(FIX_MOUNTED_PROBE, NOZZLE_AS_PROBE) && DISABLED(PAUSE_BEFORE_DEPLOY_STOW)
+    const bool z_raise_wanted = deploy;
+  #else
+    constexpr bool z_raise_wanted = true;
+  #endif
+"""
+new = """  #if ANY(BIQU_MICROPROBE_V1, BIQU_MICROPROBE_V2)
+    constexpr bool z_raise_wanted = false;
+  #elif ANY(FIX_MOUNTED_PROBE, NOZZLE_AS_PROBE) && DISABLED(PAUSE_BEFORE_DEPLOY_STOW)
+    const bool z_raise_wanted = deploy;
+  #else
+    constexpr bool z_raise_wanted = true;
+  #endif
+"""
 if old not in s:
     raise SystemExit('probe.cpp deploy clearance block not found')
 p.write_text(s.replace(old, new, 1))
@@ -33,8 +54,19 @@ p.write_text(s.replace(old, new, 1))
 # 4) MicroProbe V2 needs a short wake-up period after PA8 is asserted.
 p = root / 'src/module/endstops.cpp'
 s = p.read_text()
-old = """    #if PIN_EXISTS(PROBE_ENABLE)\n      WRITE(PROBE_ENABLE_PIN, onoff);\n    #endif\n    resync();\n"""
-new = """    #if PIN_EXISTS(PROBE_ENABLE)\n      WRITE(PROBE_ENABLE_PIN, onoff);\n      #if ANY(BIQU_MICROPROBE_V1, BIQU_MICROPROBE_V2)\n        if (onoff) safe_delay(50);\n      #endif\n    #endif\n    resync();\n"""
+old = """    #if PIN_EXISTS(PROBE_ENABLE)
+      WRITE(PROBE_ENABLE_PIN, onoff);
+    #endif
+    resync();
+"""
+new = """    #if PIN_EXISTS(PROBE_ENABLE)
+      WRITE(PROBE_ENABLE_PIN, onoff);
+      #if ANY(BIQU_MICROPROBE_V1, BIQU_MICROPROBE_V2)
+        if (onoff) safe_delay(50);
+      #endif
+    #endif
+    resync();
+"""
 if old not in s:
     raise SystemExit('endstops.cpp probe enable block not found')
 p.write_text(s.replace(old, new, 1))
