@@ -19,6 +19,9 @@ jobs:
           ref: 2.1.2.8
           path: MarlinSource
 
+      - name: Add native BIQU MicroProbe V2 support
+        run: python patches/patch_microprobe.py
+
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
 
