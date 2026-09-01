@@ -18,6 +18,7 @@ jobs:
           repository: MarlinFirmware/Marlin
           ref: 2.1.2.8
           path: MarlinSource
+          fetch-depth: 0
 
       - name: Backport official BIQU MicroProbe support
         working-directory: MarlinSource
