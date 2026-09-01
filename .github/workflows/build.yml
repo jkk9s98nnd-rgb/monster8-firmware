@@ -19,6 +19,13 @@ jobs:
           ref: 2.1.2.8
           path: MarlinSource
 
+      - name: Backport official BIQU MicroProbe support
+        working-directory: MarlinSource
+        run: |
+          git config user.name "Monster8 Builder"
+          git config user.email "builder@monster8.local"
+          git cherry-pick 204de723f1c08f83e281f0629b60822b334097ed
+
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
 
@@ -49,6 +56,6 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Monster8-Firmware
+          name: Monster8-MicroProbe-V2-Firmware
           path: output/mks_monster8.bin
           if-no-files-found: error
