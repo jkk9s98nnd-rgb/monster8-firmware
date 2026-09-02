@@ -22,8 +22,27 @@ jobs:
       - name: Add native BIQU MicroProbe V2 support
         run: python patches/patch_microprobe.py
 
+      - name: Add selectable Bilinear mesh support
+        run: python patches/patch_variable_bilinear.py
+
       - name: Apply custom config
-        run: cp monster8-config.ini MarlinSource/Marlin/config.ini
+        run: |
+          cp monster8-config.ini MarlinSource/Marlin/config.ini
+          # The extruder is now using an external pulse/dir driver.
+          sed -i 's/e0_driver_type = A4988/e0_driver_type = TB6600/' MarlinSource/Marlin/config.ini
+          cat >> MarlinSource/Marlin/config.ini <<'EOF'
+          
+          # Selectable 3x3 / 5x5 / 7x7 Bilinear leveling.
+          # A 13x13 internal mesh exactly represents all three selectable grids.
+          auto_bed_leveling_bilinear = on
+          grid_max_points_x = 13
+          grid_max_points_y = 13
+          lcd_bed_leveling = on
+          babystepping = on
+          babystep_always_available = on
+          babystep_zprobe_offset = on
+          babystep_display_total = on
+          EOF
 
       - name: Allow Z-only probe homing for CNC
         run: |
