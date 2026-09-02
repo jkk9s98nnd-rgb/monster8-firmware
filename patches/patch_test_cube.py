@@ -411,11 +411,19 @@ replace_once(
     "declare setup cube task",
 )
 
-replace_once(
-    core,
-    "    marlin.idle();\n\n    #if HAS_MEDIA\n",
-    "    marlin.idle();\n\n    #if HAS_MARLINUI_MENU\n      monster8_test_cube_task();\n    #endif\n\n    #if HAS_MEDIA\n",
-    "service setup cube task",
+core_text = core.read_text()
+loop_pos = core_text.find("void loop() {")
+if loop_pos < 0:
+    raise SystemExit("service setup cube task: loop() not found")
+idle_pos = core_text.find("    marlin.idle();", loop_pos)
+if idle_pos < 0:
+    raise SystemExit("service setup cube task: marlin.idle() not found inside loop()")
+idle_end = idle_pos + len("    marlin.idle();")
+core_text = (
+    core_text[:idle_end]
+    + "\n\n    #if HAS_MARLINUI_MENU\n      monster8_test_cube_task();\n    #endif"
+    + core_text[idle_end:]
 )
+core.write_text(core_text)
 
 print("Added LCD stand-alone 10mm setup cube with editable temperature and selectable 0.4/0.6/0.8mm nozzle")
