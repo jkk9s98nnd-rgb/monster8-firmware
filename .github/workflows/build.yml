@@ -25,6 +25,9 @@ jobs:
       - name: Add selectable Bilinear mesh support
         run: python patches/patch_variable_bilinear.py
 
+      - name: Add stand-alone LCD setup cube
+        run: python patches/patch_test_cube.py
+
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
 
