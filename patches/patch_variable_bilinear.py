@@ -9,7 +9,7 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
 
 
 g29 = Path("MarlinSource/Marlin/src/gcode/bedlevel/abl/G29.cpp")
-menu = Path("MarlinSource/Marlin/src/lcd/menu/menu_probe_level.cpp")
+menu = Path("MarlinSource/Marlin/src/lcd/menu/menu_bed_leveling.cpp")
 
 # Make Bilinear use a runtime probe density while keeping a larger fixed
 # internal mesh. The build sets GRID_MAX_POINTS_X/Y to 13 so the 3x3, 5x5,
@@ -40,15 +40,15 @@ replace_once(
 # referenced before mesh probing, so G29 must only require Z to have been homed.
 replace_once(
     g29,
-    "if (motion.homing_needed_error()) G29_RETURN(false, false);",
-    "if (motion.homing_needed_error(_BV(Z_AXIS))) G29_RETURN(false, false);",
+    "if (homing_needed_error()) G29_RETURN(false, false);",
+    "if (homing_needed_error(_BV(Z_AXIS))) G29_RETURN(false, false);",
     "Z-only G29 homing requirement",
 )
 
 replace_once(
     g29,
     """    #elif ENABLED(AUTO_BED_LEVELING_BILINEAR)\n\n      abl.Z_offset = parser.linearval('Z');\n\n    #endif\n""",
-    """    #elif ENABLED(AUTO_BED_LEVELING_BILINEAR)\n\n      abl.Z_offset = parser.linearval('Z');\n\n      // Monster8 selectable Bilinear probe density. The internal correction\n      // mesh stays fixed-size; the sampled surface is interpolated into it.\n      const uint8_t requested_points = parser.byteval('P', 7);\n      if (NONE(requested_points == 3, requested_points == 5, requested_points == 7)) {\n        SERIAL_ECHOLNPGM(GCODE_ERR_MSG(\"Bilinear P must be 3, 5, or 7.\"));\n        G29_RETURN(false, false);\n      }\n      if (requested_points > GRID_MAX_POINTS_X || requested_points > GRID_MAX_POINTS_Y) {\n        SERIAL_ECHOLNPGM(GCODE_ERR_MSG(\"Selected Bilinear grid exceeds internal mesh size.\"));\n        G29_RETURN(false, false);\n      }\n      abl.grid_points.set(requested_points, requested_points);\n      abl.abl_points = grid_count_t(requested_points) * requested_points;\n\n    #endif\n""",
+    """    #elif ENABLED(AUTO_BED_LEVELING_BILINEAR)\n\n      abl.Z_offset = parser.linearval('Z');\n\n      // Monster8 selectable Bilinear probe density. The internal correction\n      // mesh stays fixed-size; the sampled surface is interpolated into it.\n      const uint8_t requested_points = parser.byteval('P', 7);\n      if (requested_points != 3 && requested_points != 5 && requested_points != 7) {\n        SERIAL_ECHOLNPGM(\"?Bilinear P must be 3, 5, or 7.\");\n        G29_RETURN(false, false);\n      }\n      if (requested_points > GRID_MAX_POINTS_X || requested_points > GRID_MAX_POINTS_Y) {\n        SERIAL_ECHOLNPGM(\"?Selected Bilinear grid exceeds internal mesh size.\");\n        G29_RETURN(false, false);\n      }\n      abl.grid_points.set(requested_points, requested_points);\n      abl.abl_points = requested_points * requested_points;\n\n    #endif\n""",
     "parse selectable bilinear density",
 )
 
@@ -75,31 +75,23 @@ g29.write_text(text)
 replace_once(
     g29,
     """    #if ENABLED(AUTO_BED_LEVELING_BILINEAR)\n\n      if (abl.dryrun)\n        bedlevel.print_leveling_grid(&abl.z_values);\n      else {\n        bedlevel.set_grid(abl.gridSpacing, abl.probe_position_lf);\n        COPY(bedlevel.z_values, abl.z_values);\n        TERN_(IS_KINEMATIC, bedlevel.extrapolate_unprobed_bed_level());\n        bedlevel.refresh_bed_level();\n\n        bedlevel.print_leveling_grid();\n      }\n\n    #elif ENABLED(AUTO_BED_LEVELING_LINEAR)\n""",
-    """    #if ENABLED(AUTO_BED_LEVELING_BILINEAR)\n\n      // Expand the selected 3x3 / 5x5 / 7x7 sampled Bilinear surface into\n      // the fixed 13x13 internal mesh. Because 12 is divisible by 2, 4, and\n      // 6, every selected sample node is represented exactly. The values\n      // between sample nodes are ordinary bilinear interpolation.\n      for (uint8_t ix = 0; ix < GRID_MAX_POINTS_X; ++ix) {\n        const float sx = float(ix) * float(abl.grid_points.x - 1) / float(GRID_MAX_POINTS_X - 1);\n        const uint8_t x0 = uint8_t(sx), x1 = _MIN(uint8_t(x0 + 1), uint8_t(abl.grid_points.x - 1));\n        const float fx = sx - x0;\n        for (uint8_t iy = 0; iy < GRID_MAX_POINTS_Y; ++iy) {\n          const float sy = float(iy) * float(abl.grid_points.y - 1) / float(GRID_MAX_POINTS_Y - 1);\n          const uint8_t y0 = uint8_t(sy), y1 = _MIN(uint8_t(y0 + 1), uint8_t(abl.grid_points.y - 1));\n          const float fy = sy - y0;\n\n          const float z00 = abl.sampled_z_values[x0][y0],\n                      z10 = abl.sampled_z_values[x1][y0],\n                      z01 = abl.sampled_z_values[x0][y1],\n                      z11 = abl.sampled_z_values[x1][y1],\n                      za  = z00 + (z10 - z00) * fx,\n                      zb  = z01 + (z11 - z01) * fx;\n          abl.z_values[ix][iy] = za + (zb - za) * fy;\n        }\n      }\n\n      xy_float_t full_grid_spacing;\n      full_grid_spacing.set(\n        (abl.probe_position_rb.x - abl.probe_position_lf.x) / (GRID_MAX_POINTS_X - 1),\n        (abl.probe_position_rb.y - abl.probe_position_lf.y) / (GRID_MAX_POINTS_Y - 1)\n      );\n\n      if (abl.dryrun)\n        bedlevel.print_leveling_grid(&abl.z_values);\n      else {\n        bedlevel.set_grid(full_grid_spacing, abl.probe_position_lf);\n        COPY(bedlevel.z_values, abl.z_values);\n        TERN_(IS_KINEMATIC, bedlevel.extrapolate_unprobed_bed_level());\n        bedlevel.refresh_bed_level();\n\n        bedlevel.print_leveling_grid();\n      }\n\n    #elif ENABLED(AUTO_BED_LEVELING_LINEAR)\n""",
+    """    #if ENABLED(AUTO_BED_LEVELING_BILINEAR)\n\n      // Expand the selected 3x3 / 5x5 / 7x7 sampled Bilinear surface into\n      // the fixed 13x13 internal mesh. Because 12 is divisible by 2, 4, and\n      // 6, every selected sample node is represented exactly. The values\n      // between sample nodes are ordinary bilinear interpolation.\n      for (uint8_t ix = 0; ix < GRID_MAX_POINTS_X; ++ix) {\n        const float sx = float(ix) * float(abl.grid_points.x - 1) / float(GRID_MAX_POINTS_X - 1);\n        const uint8_t x0 = uint8_t(sx),\n                      x1 = x0 + 1 < abl.grid_points.x ? x0 + 1 : x0;\n        const float fx = sx - x0;\n        for (uint8_t iy = 0; iy < GRID_MAX_POINTS_Y; ++iy) {\n          const float sy = float(iy) * float(abl.grid_points.y - 1) / float(GRID_MAX_POINTS_Y - 1);\n          const uint8_t y0 = uint8_t(sy),\n                        y1 = y0 + 1 < abl.grid_points.y ? y0 + 1 : y0;\n          const float fy = sy - y0;\n\n          const float z00 = abl.sampled_z_values[x0][y0],\n                      z10 = abl.sampled_z_values[x1][y0],\n                      z01 = abl.sampled_z_values[x0][y1],\n                      z11 = abl.sampled_z_values[x1][y1],\n                      za  = z00 + (z10 - z00) * fx,\n                      zb  = z01 + (z11 - z01) * fx;\n          abl.z_values[ix][iy] = za + (zb - za) * fy;\n        }\n      }\n\n      xy_float_t full_grid_spacing;\n      full_grid_spacing.set(\n        (abl.probe_position_rb.x - abl.probe_position_lf.x) / (GRID_MAX_POINTS_X - 1),\n        (abl.probe_position_rb.y - abl.probe_position_lf.y) / (GRID_MAX_POINTS_Y - 1)\n      );\n\n      if (abl.dryrun)\n        bedlevel.print_leveling_grid(&abl.z_values);\n      else {\n        bedlevel.set_grid(full_grid_spacing, abl.probe_position_lf);\n        COPY(bedlevel.z_values, abl.z_values);\n        TERN_(IS_KINEMATIC, bedlevel.extrapolate_unprobed_bed_level());\n        bedlevel.refresh_bed_level();\n\n        bedlevel.print_leveling_grid();\n      }\n\n    #elif ENABLED(AUTO_BED_LEVELING_LINEAR)\n""",
     "interpolate selected bilinear grid",
-)
-
-# Document P for Bilinear as well as Linear.
-replace_once(
-    g29,
-    """ *   With AUTO_BED_LEVELING_LINEAR:\n *     P<int>  Set the size of the grid that will be probed (P x P points)\n *             Example: G29 P4\n""",
-    """ *   With AUTO_BED_LEVELING_LINEAR:\n *     P<int>  Set the size of the grid that will be probed (P x P points)\n *             Example: G29 P4\n""",
-    "G29 documentation anchor",
 )
 
 # LCD: never offer plain G28 on this machine. Add Z-only homing and three
 # explicit Bilinear mesh choices. Each run saves the resulting mesh to EEPROM.
 replace_once(
     menu,
-    """    #if NONE(PROBE_MANUALLY, MESH_BED_LEVELING)\n      if (!is_trusted) GCODES_ITEM(MSG_AUTO_HOME, FPSTR(G28_STR));\n    #endif\n""",
-    """    #if NONE(PROBE_MANUALLY, MESH_BED_LEVELING)\n      GCODES_ITEM_F(F(\"Home Z Only\"), F(\"G28 Z\"));\n    #endif\n""",
+    """  // Auto Home if not using manual probing\n  #if NONE(PROBE_MANUALLY, MESH_BED_LEVELING)\n    if (!is_homed) GCODES_ITEM(MSG_AUTO_HOME, FPSTR(G28_STR));\n  #endif\n""",
+    """  // This machine has no X/Y homing switches. Never offer plain G28.\n  #if NONE(PROBE_MANUALLY, MESH_BED_LEVELING)\n    GCODES_ITEM_F(F(\"Home Z Only\"), F(\"G28 Z\"));\n  #endif\n""",
     "LCD Z-only home item",
 )
 
 replace_once(
     menu,
-    """      #else\n        // Automatic leveling can just run the G-code\n        GCODES_ITEM(MSG_LEVEL_BED, is_homed ? F(\"G29\") : F(\"G29N\"));\n      #endif\n""",
-    """      #else\n        // Monster8 selectable Bilinear mesh density. X/Y are manually\n        // referenced; each sequence homes only Z, probes, then saves EEPROM.\n        GCODES_ITEM_F(F(\"Run 3x3 Mesh\"), F(\"G28 Z\\nG29 P3\\nM500\"));\n        GCODES_ITEM_F(F(\"Run 5x5 Mesh\"), F(\"G28 Z\\nG29 P5\\nM500\"));\n        GCODES_ITEM_F(F(\"Run 7x7 Mesh\"), F(\"G28 Z\\nG29 P7\\nM500\"));\n        GCODES_ITEM_F(F(\"Leveling ON\"),  F(\"M420 S1\"));\n        GCODES_ITEM_F(F(\"Leveling OFF\"), F(\"M420 S0\"));\n        #if ENABLED(BABYSTEP_ZPROBE_OFFSET)\n          GCODES_ITEM_F(F(\"Z Offset +0.10\"), F(\"M290 Z0.10\"));\n          GCODES_ITEM_F(F(\"Z Offset -0.10\"), F(\"M290 Z-0.10\"));\n        #endif\n      #endif\n""",
+    """  #else\n    // Automatic leveling can just run the G-code\n    GCODES_ITEM(MSG_LEVEL_BED, is_homed ? F(\"G29\") : F(\"G29N\"));\n  #endif\n""",
+    """  #else\n    // Monster8 selectable Bilinear mesh density. X/Y are manually\n    // referenced; each sequence homes only Z, probes, then saves EEPROM.\n    GCODES_ITEM_F(F(\"Run 3x3 Mesh\"), F(\"G28 Z\\nG29 P3\\nM500\"));\n    GCODES_ITEM_F(F(\"Run 5x5 Mesh\"), F(\"G28 Z\\nG29 P5\\nM500\"));\n    GCODES_ITEM_F(F(\"Run 7x7 Mesh\"), F(\"G28 Z\\nG29 P7\\nM500\"));\n    GCODES_ITEM_F(F(\"Leveling ON\"),  F(\"M420 S1\"));\n    GCODES_ITEM_F(F(\"Leveling OFF\"), F(\"M420 S0\"));\n    #if ENABLED(BABYSTEP_ZPROBE_OFFSET)\n      GCODES_ITEM_F(F(\"Z Offset +0.10\"), F(\"M290 Z0.10\"));\n      GCODES_ITEM_F(F(\"Z Offset -0.10\"), F(\"M290 Z-0.10\"));\n    #endif\n  #endif\n""",
     "LCD selectable mesh items",
 )
 
