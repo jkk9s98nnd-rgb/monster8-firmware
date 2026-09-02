@@ -26,7 +26,37 @@ jobs:
         run: python patches/patch_variable_bilinear.py
 
       - name: Add stand-alone LCD setup cube
-        run: python patches/patch_test_cube.py
+        run: |
+          # patch_test_cube supports newer Marlin's marlin.idle() spelling.
+          # Marlin 2.1.2.8 uses idle(), so temporarily normalize the one
+          # top-level loop call, apply the patch, then restore 2.1.2.8 syntax.
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("MarlinSource/Marlin/src/MarlinCore.cpp")
+          s = p.read_text()
+          marker = "void loop() {"
+          start = s.find(marker)
+          if start < 0:
+              raise SystemExit("Marlin loop() not found")
+          pos = s.find("    idle();", start)
+          if pos < 0:
+              raise SystemExit("Marlin 2.1.2.8 loop idle() not found")
+          s = s[:pos] + "    marlin.idle();" + s[pos + len("    idle();"):]
+          p.write_text(s)
+          PY
+          python patches/patch_test_cube.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("MarlinSource/Marlin/src/MarlinCore.cpp")
+          s = p.read_text()
+          marker = "void loop() {"
+          start = s.find(marker)
+          pos = s.find("    marlin.idle();", start)
+          if pos < 0:
+              raise SystemExit("Temporary marlin.idle() not found after cube patch")
+          s = s[:pos] + "    idle();" + s[pos + len("    marlin.idle();"):]
+          p.write_text(s)
+          PY
 
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
