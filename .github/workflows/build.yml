@@ -39,6 +39,7 @@ jobs:
           grid_max_points_y = 13
           lcd_bed_leveling = on
           babystepping = on
+          babystep_without_homing = on
           babystep_always_available = on
           babystep_zprobe_offset = on
           babystep_display_total = on
