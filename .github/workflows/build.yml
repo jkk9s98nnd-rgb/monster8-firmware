@@ -25,6 +25,9 @@ jobs:
       - name: Add selectable Bilinear mesh support
         run: python patches/patch_variable_bilinear.py
 
+      - name: Add adjustable temporary mesh area
+        run: python patches/patch_mesh_area.py
+
       - name: Add stand-alone LCD setup cube
         run: |
           # patch_test_cube supports newer Marlin's marlin.idle() spelling.
