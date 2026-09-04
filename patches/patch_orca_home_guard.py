@@ -114,12 +114,15 @@ if 'F("Ignore XY Home")' not in s:
 
 main.write_text(s)
 
-# Regression guard: this patch must not alter bed-leveling source.
+# Regression guard: this feature is not allowed to build unless the bed-level
+# path is still the exact native-zero + 10mm-inset implementation proven on
+# the printer.
 bed = root / "src/lcd/menu/menu_bed_leveling.cpp"
 bed_text = bed.read_text()
 for required in [
-    'map_left  = LOGICAL_TO_NATIVE(10.0f, X_AXIS)',
-    'map_front = LOGICAL_TO_NATIVE(10.0f, Y_AXIS)',
+    'const int16_t map_left  = 10,',
+    'map_front = 10,',
+    'PSTR("G28 Z\\nG90\\nG1 Z%i F600\\nG29 P%u L%i R%i F%i B%i E V1\\nM500")',
     'ACTION_ITEM_F(F("Run 3x3 Mesh"), m8_run_mesh_3);',
 ]:
     if required not in bed_text:
