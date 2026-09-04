@@ -29,29 +29,11 @@ if old not in s:
     raise SystemExit('Conditionals_LCD.h stowable probe list not found')
 p.write_text(s.replace(old, new, 1))
 
-# 3) MicroProbe does not need the machine to move Z just to extend/retract.
-#    Keep M401/M402 motionless on this machine.
-p = root / 'src/module/probe.cpp'
-s = p.read_text()
-old = """  #if ANY(FIX_MOUNTED_PROBE, NOZZLE_AS_PROBE) && DISABLED(PAUSE_BEFORE_DEPLOY_STOW)
-    const bool z_raise_wanted = deploy;
-  #else
-    constexpr bool z_raise_wanted = true;
-  #endif
-"""
-new = """  #if ANY(BIQU_MICROPROBE_V1, BIQU_MICROPROBE_V2)
-    constexpr bool z_raise_wanted = false;
-  #elif ANY(FIX_MOUNTED_PROBE, NOZZLE_AS_PROBE) && DISABLED(PAUSE_BEFORE_DEPLOY_STOW)
-    const bool z_raise_wanted = deploy;
-  #else
-    constexpr bool z_raise_wanted = true;
-  #endif
-"""
-if old not in s:
-    raise SystemExit('probe.cpp deploy clearance block not found')
-p.write_text(s.replace(old, new, 1))
+# IMPORTANT: Do not suppress Marlin's normal Z raise around probe deploy/stow.
+# G29 uses the same deploy/stow path as M401/M402. Disabling that raise caused
+# the MicroProbe pin to extend while the carriage was too close to the bed.
 
-# 4) MicroProbe V2 needs a short wake-up period after PA8 is asserted.
+# 3) MicroProbe V2 needs a short wake-up period after PA8 is asserted.
 p = root / 'src/module/endstops.cpp'
 s = p.read_text()
 old = """    #if PIN_EXISTS(PROBE_ENABLE)
@@ -71,4 +53,4 @@ if old not in s:
     raise SystemExit('endstops.cpp probe enable block not found')
 p.write_text(s.replace(old, new, 1))
 
-print('Applied native BIQU MicroProbe V2 support patch')
+print('Applied native BIQU MicroProbe V2 support patch with normal Marlin Z clearance')
