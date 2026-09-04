@@ -67,6 +67,9 @@ jobs:
       - name: Add LCD mesh safe height and diagnostics
         run: python patches/patch_lcd_mesh_debug_v2.py
 
+      - name: Make mesh bounds follow the single XY zero
+        run: python patches/patch_mesh_work_zero.py
+
       - name: Add adjustable probe search depth
         run: python patches/patch_probe_search_depth.py
 
@@ -131,6 +134,6 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Monster8-BedLevel-Restore-Firmware
+          name: Monster8-Native-XY-Zero-Firmware
           path: output/mks_monster8.bin
           if-no-files-found: error
