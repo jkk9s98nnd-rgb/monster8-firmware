@@ -65,7 +65,7 @@ jobs:
         run: python patches/patch_probe_mesh_reliability.py
 
       - name: Add LCD mesh safe height and diagnostics
-        run: python patches/patch_lcd_mesh_debug.py
+        run: python patches/patch_lcd_mesh_debug_v2.py
 
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
