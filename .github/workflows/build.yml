@@ -30,9 +30,6 @@ jobs:
 
       - name: Add stand-alone LCD setup cube
         run: |
-          # patch_test_cube supports newer Marlin's marlin.idle() spelling.
-          # Marlin 2.1.2.8 uses idle(), so temporarily normalize the one
-          # top-level loop call, apply the patch, then restore 2.1.2.8 syntax.
           python - <<'PY'
           from pathlib import Path
           p = Path("MarlinSource/Marlin/src/MarlinCore.cpp")
@@ -66,6 +63,9 @@ jobs:
 
       - name: Add probe and mesh reliability fixes
         run: python patches/patch_probe_mesh_reliability.py
+
+      - name: Add LCD mesh safe height and diagnostics
+        run: python patches/patch_lcd_mesh_debug.py
 
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
@@ -110,6 +110,6 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Monster8-Probe-Mesh-Reliability-Firmware
+          name: Monster8-LCD-Mesh-Debug-Firmware
           path: output/mks_monster8.bin
           if-no-files-found: error
