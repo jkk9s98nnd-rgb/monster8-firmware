@@ -46,22 +46,23 @@ else:
     raise SystemExit("test-print map getter usage not recognized")
 main.write_text(main_text)
 
-# Regression guards. The current mesh runner must:
+# Regression guards. The mesh runner must preserve the proven motion path:
 # - home Z only
 # - raise to the LCD-selected safe Z
-# - use explicit L/R/F/B bounds
-# - use native coordinates calculated from the one user-set XY zero
+# - start probing at the 10mm inset, never exactly X0/Y0
+# - use the selected Map X / Map Y as the outer limits
+# - save a successful mesh
 check = bed.read_text()
 required_parts = [
-    'PSTR("G28 Z\\nG90\\nG1 Z%i F600\\nG29 P%u L%s R%s F%s B%s E V1")',
-    'LOGICAL_TO_NATIVE(0.0f, X_AXIS)',
-    'LOGICAL_TO_NATIVE(0.0f, Y_AXIS)',
-    'map_right = map_left  + float(m8_mesh_x_mm)',
-    'map_back  = map_front + float(m8_mesh_y_mm)',
+    'const int16_t map_left  = 10,',
+    'map_front = 10,',
+    'map_right = m8_mesh_x_mm,',
+    'map_back  = m8_mesh_y_mm;',
+    'PSTR("G28 Z\\nG90\\nG1 Z%i F600\\nG29 P%u L%i R%i F%i B%i E V1\\nM500")',
     'ACTION_ITEM_F(F("Run 3x3 Mesh"), m8_run_mesh_3);',
 ]
 for part in required_parts:
     if part not in check:
-        raise SystemExit(f"native-zero mesh regression guard failed: {part}")
+        raise SystemExit(f"mesh regression guard failed: {part}")
 
-print("Verified bed-level state isolation and native XY-zero mesh bounds")
+print("Verified native XY zero plus known-good 10mm mesh inset")
