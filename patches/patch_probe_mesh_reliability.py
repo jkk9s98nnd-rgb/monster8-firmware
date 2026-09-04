@@ -22,15 +22,18 @@ bed = root / "src/lcd/menu/menu_bed_leveling.cpp"
 replace_once(
     probe,
     """  if (endstops.z_probe_enabled == deploy) return false;\n""",
-    """  #if ANY(BIQU_MICROPROBE_V1, BIQU_MICROPROBE_V2)\n    static bool m8_probe_conditioned = false;\n    if (deploy && !m8_probe_conditioned) {\n      // Cold-start conditioning: force a complete disable / enable / disable\n      // sequence and allow the probe electronics to settle before the first\n      // real deployment. No Z motion occurs during this sequence.\n      endstops.enable_z_probe(false);\n      safe_delay(250);\n      endstops.enable_z_probe(true);\n      safe_delay(250);\n      endstops.enable_z_probe(false);\n      safe_delay(250);\n      m8_probe_conditioned = true;\n    }\n  #endif\n\n  if (endstops.z_probe_enabled == deploy) return false;\n""",
+    """  #if ANY(BIQU_MICROPROBE_V1, BIQU_MICROPROBE_V2)\n    static bool m8_probe_conditioned = false;\n    if (deploy && !m8_probe_conditioned) {\n      // Cold-start conditioning: force a complete disable / enable / disable\n      // sequence and allow the probe electronics to settle before the first\n      // real deployment. No Z motion occurs during this sequence.\n      endstops.enable_z_probe(false);\n      safe_delay(250);\n      endstops.enable_z_probe(true);\n      safe_delay(500);\n      endstops.enable_z_probe(false);\n      safe_delay(250);\n      m8_probe_conditioned = true;\n    }\n  #endif\n\n  if (endstops.z_probe_enabled == deploy) return false;\n""",
     "cold-start MicroProbe conditioning",
 )
 
-# Give every enable edge more settling time than the old 50ms backport.
+# Give every enable edge enough settling time for the MicroProbe V2 trigger
+# electronics. Also give the stow edge a short settle period before the next
+# deploy. This is intentionally conservative because this machine has already
+# shown a first-cycle miss after power-up.
 replace_once(
     endstops,
     """        if (onoff) safe_delay(50);\n""",
-    """        if (onoff) safe_delay(150);\n""",
+    """        safe_delay(onoff ? 500 : 200);\n""",
     "MicroProbe wake delay",
 )
 
@@ -47,9 +50,9 @@ replace_once(
 # ---------------------------------------------------------------------------
 # 2) Temporary G29 area reliability
 # ---------------------------------------------------------------------------
-# The previous custom command used L0/F0. Marlin's default probing margin
-# rejects those bounds, so what looked like the first mesh point was actually
-# only G28 Z; G29 then returned immediately and M500 printed "Settings Stored".
+# The previous custom command used L0/F0. Marlin's normal probing limits reject
+# those bounds, so what looked like the first mesh point was actually only
+# G28 Z; G29 then returned immediately and M500 printed "Settings Stored".
 # Keep a 10mm probing inset inside the user-selected temporary map.
 replace_once(
     bed,
@@ -66,4 +69,4 @@ replace_once(
     "minimum temporary mesh size",
 )
 
-print("Applied MicroProbe cold-start conditioning and corrected G29 temporary-map bounds")
+print("Applied MicroProbe cold-start conditioning, 500ms settle, and corrected G29 temporary-map bounds")
