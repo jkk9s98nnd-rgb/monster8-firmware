@@ -13,15 +13,27 @@ bed = root / "src/lcd/menu/menu_bed_leveling.cpp"
 main = root / "src/lcd/menu/menu_main.cpp"
 
 # ---------------------------------------------------------------------------
-# Share the selected bed-map dimensions with the standalone test print.
+# Bed Level Setup
+# IMPORTANT: Keep the known-good mesh X/Y variables private (static).
+# The cube reads them through tiny getter functions instead of changing their
+# linkage. This avoids touching the working bed-level state itself.
 # ---------------------------------------------------------------------------
 text = bed.read_text()
-for axis in ("x", "y"):
-    old = f"static int16_t m8_mesh_{axis}_mm = 100;"
-    new = f"int16_t m8_mesh_{axis}_mm = 100;"
-    if old not in text:
-        raise SystemExit(f"shared map {axis.upper()} variable not found")
-    text = text.replace(old, new, 1)
+
+old = """static int16_t m8_mesh_x_mm = 100;
+static int16_t m8_mesh_y_mm = 100;
+
+static void m8_run_sized_mesh"""
+new = """static int16_t m8_mesh_x_mm = 100;
+static int16_t m8_mesh_y_mm = 100;
+
+int16_t m8_get_mesh_x_mm() { return m8_mesh_x_mm; }
+int16_t m8_get_mesh_y_mm() { return m8_mesh_y_mm; }
+
+static void m8_run_sized_mesh"""
+if old not in text:
+    raise SystemExit("private mesh dimension block not found")
+text = text.replace(old, new, 1)
 
 # Let Mesh Safe Z go lower than 6 mm while keeping the 10 mm default.
 old = 'EDIT_ITEM_F(int3, F("Mesh Safe Z mm"), &m8_mesh_safe_z, 6, 20);'
@@ -36,13 +48,14 @@ bed.write_text(text)
 # ---------------------------------------------------------------------------
 text = main.read_text()
 
-# The test print uses the same X/Y map dimensions selected in Bed Level Setup.
+# Read the selected map dimensions through getters. Do NOT export or alter the
+# bed-level variables themselves.
 include_anchor = '#include "../../module/motion.h"\n'
 if include_anchor not in text:
     raise SystemExit("menu_main motion include not found")
 text = text.replace(
     include_anchor,
-    include_anchor + '\nextern int16_t m8_mesh_x_mm, m8_mesh_y_mm;\n',
+    include_anchor + '\nextern int16_t m8_get_mesh_x_mm();\nextern int16_t m8_get_mesh_y_mm();\n',
     1,
 )
 
@@ -72,7 +85,8 @@ text = text.replace(old, new, 1)
 # limited by the machine's 305 mm Z travel because this remains a cube.
 anchor = "static float m8tc_flow_scale() { return float(m8tc_flow) * 0.01f; }\n"
 helper = """static int16_t m8tc_max_size() {
-  int16_t v = m8_mesh_x_mm < m8_mesh_y_mm ? m8_mesh_x_mm : m8_mesh_y_mm;
+  const int16_t mx = m8_get_mesh_x_mm(), my = m8_get_mesh_y_mm();
+  int16_t v = mx < my ? mx : my;
   if (v > 305) v = 305;
   if (v < 5) v = 5;
   return v;
@@ -157,8 +171,7 @@ if old not in text:
 text = text.replace(old, new, 1)
 
 # Return from priming to the actual X0/Y0 cube origin. Lift first so the nozzle
-# can't scrape across the fresh prime lines. The following outer perimeter then
-# begins from X0/Y0, allowing a cube to use the full selected map dimensions.
+# can't scrape across the fresh prime lines.
 old = """    case M8TC_PRIME_TO_CUBE:
       // Leave a generous gap between the priming lines and the test cube so
       // the purge is easy to see and cannot merge into the first layer.
@@ -271,4 +284,4 @@ if old not in text:
 text = text.replace(old, new, 1)
 
 main.write_text(text)
-print("Added mapped-area cube size, X0/Y0 start, infill %, Mesh Safe Z 2mm minimum, and immediate stop lift")
+print("Added mapped-area cube features without changing private bed-level mesh state")
