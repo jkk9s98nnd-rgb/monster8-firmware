@@ -85,6 +85,9 @@ jobs:
       - name: Wait for physical lift before XY motion
         run: python patches/patch_wait_for_physical_lift.py
 
+      - name: Prevent STOP queue race and LCD deadlock
+        run: python patches/patch_stop_deadlock_guard.py
+
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
 
