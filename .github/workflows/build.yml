@@ -73,6 +73,12 @@ jobs:
       - name: Add mapped-area cube and stop improvements
         run: python patches/patch_cube_map_infill_stop.py
 
+      - name: Make mesh follow user XY zero
+        run: python patches/patch_mesh_work_zero.py
+
+      - name: Fix test stop temp and prime placement
+        run: python patches/patch_test_stop_temp_prime.py
+
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
 
@@ -116,6 +122,6 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Monster8-Mapped-Cube-Firmware
+          name: Monster8-Test-Fixes-Firmware
           path: output/mks_monster8.bin
           if-no-files-found: error
