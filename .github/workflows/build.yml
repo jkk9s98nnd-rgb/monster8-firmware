@@ -79,6 +79,9 @@ jobs:
       - name: Fix test stop temp and prime placement
         run: python patches/patch_test_stop_temp_prime.py
 
+      - name: Start test with lift and XY zero move
+        run: python patches/patch_test_start_lift_zero.py
+
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
 
