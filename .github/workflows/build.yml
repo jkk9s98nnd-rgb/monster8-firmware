@@ -82,6 +82,9 @@ jobs:
       - name: Start test with lift and XY zero move
         run: python patches/patch_test_start_lift_zero.py
 
+      - name: Wait for physical lift before XY motion
+        run: python patches/patch_wait_for_physical_lift.py
+
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
 
