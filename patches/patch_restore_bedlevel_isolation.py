@@ -4,9 +4,9 @@ root = Path("MarlinSource/Marlin")
 bed = root / "src/lcd/menu/menu_bed_leveling.cpp"
 main = root / "src/lcd/menu/menu_main.cpp"
 
-# Keep the exact private/static map variables used by the known-good bed-level
-# build. Older mapped-cube patches exported them; newer ones already use the
-# getter approach. Handle either input without stacking duplicate edits.
+# Keep the private/static map variables used by the bed-level menu. The test
+# print may read the selected size through getters, but must never mutate mesh
+# state or the mesh runner directly.
 bed_text = bed.read_text()
 global_block = "int16_t m8_mesh_x_mm = 100;\nint16_t m8_mesh_y_mm = 100;\n"
 private_block = """static int16_t m8_mesh_x_mm = 100;
@@ -46,12 +46,22 @@ else:
     raise SystemExit("test-print map getter usage not recognized")
 main.write_text(main_text)
 
-# Regression guards: known-good mesh command path and diagnostics must remain.
+# Regression guards. The current mesh runner must:
+# - home Z only
+# - raise to the LCD-selected safe Z
+# - use explicit L/R/F/B bounds
+# - use native coordinates calculated from the one user-set XY zero
 check = bed.read_text()
-required = 'PSTR("G28 Z\\nG90\\nG1 Z%i F600\\nG29 P%u L10 R%i F10 B%i E V1")'
-if required not in check:
-    raise SystemExit("known-good G28 Z -> safe-Z -> G29 mesh path was changed")
-if 'ACTION_ITEM_F(F("Run 3x3 Mesh"), m8_run_mesh_3);' not in check:
-    raise SystemExit("3x3 mesh menu action missing")
+required_parts = [
+    'PSTR("G28 Z\\nG90\\nG1 Z%i F600\\nG29 P%u L%s R%s F%s B%s E V1")',
+    'LOGICAL_TO_NATIVE(0.0f, X_AXIS)',
+    'LOGICAL_TO_NATIVE(0.0f, Y_AXIS)',
+    'map_right = map_left  + float(m8_mesh_x_mm)',
+    'map_back  = map_front + float(m8_mesh_y_mm)',
+    'ACTION_ITEM_F(F("Run 3x3 Mesh"), m8_run_mesh_3);',
+]
+for part in required_parts:
+    if part not in check:
+        raise SystemExit(f"native-zero mesh regression guard failed: {part}")
 
-print("Verified bed-level map state isolation; cube uses read-only map getters")
+print("Verified bed-level state isolation and native XY-zero mesh bounds")
