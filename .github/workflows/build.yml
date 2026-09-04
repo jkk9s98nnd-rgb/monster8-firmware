@@ -73,8 +73,8 @@ jobs:
       - name: Add mapped-area cube and stop improvements
         run: python patches/patch_cube_map_infill_stop.py
 
-      - name: Make mesh follow user XY zero
-        run: python patches/patch_mesh_work_zero.py
+      - name: Restore bed-level state isolation
+        run: python patches/patch_restore_bedlevel_isolation.py
 
       - name: Fix test stop temp and prime placement
         run: python patches/patch_test_stop_temp_prime.py
@@ -131,6 +131,6 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Monster8-Test-Fixes-Firmware
+          name: Monster8-BedLevel-Restore-Firmware
           path: output/mks_monster8.bin
           if-no-files-found: error
