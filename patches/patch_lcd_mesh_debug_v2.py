@@ -257,16 +257,14 @@ replace_once(
     "LCD safe Z and recall controls",
 )
 
-# Start every run with a clean result state.
+# Start every run with a clean result state. Hook only the stable function
+# signature so comments added by earlier patches don't matter.
 replace_once(
     bed,
-    """static void m8_run_sized_mesh(const uint8_t points) {
-  const int16_t map_right = m8_mesh_x_mm - 10,
-""",
+    "static void m8_run_sized_mesh(const uint8_t points) {\n",
     """static void m8_run_sized_mesh(const uint8_t points) {
   m8_probe_fail_reason = 0;
   m8_mesh_last_point = 0;
-  const int16_t map_right = m8_mesh_x_mm - 10,
 """,
     "reset last mesh result",
 )
