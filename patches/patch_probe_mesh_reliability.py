@@ -12,6 +12,7 @@ root = Path("MarlinSource/Marlin")
 probe = root / "src/module/probe.cpp"
 endstops = root / "src/module/endstops.cpp"
 bed = root / "src/lcd/menu/menu_bed_leveling.cpp"
+config = root / "Configuration.h"
 
 # ---------------------------------------------------------------------------
 # 1) BIQU MicroProbe V2 cold-start reliability
@@ -37,9 +38,9 @@ replace_once(
     "MicroProbe wake delay",
 )
 
-# Refuse a normal probing descent if the input is already reporting TRIGGERED
-# immediately after deployment. This catches a bad / floating / stuck input
-# before motion begins during G29 probing.
+# Refuse a probing descent if the input is already reporting TRIGGERED
+# immediately after deployment. With the larger Z clearance below, this now
+# catches a genuine bad/stuck input instead of a probe pin touching the bed.
 replace_once(
     probe,
     """  // Disable stealthChop if used. Enable diag1 pin on driver.\n""",
@@ -48,17 +49,32 @@ replace_once(
 )
 
 # ---------------------------------------------------------------------------
-# 2) Temporary G29 area reliability
+# 2) Safe Z clearance for every mesh move
 # ---------------------------------------------------------------------------
-# The previous custom command used L0/F0. Marlin's normal probing limits reject
-# those bounds, so what looked like the first mesh point was actually only
-# G28 Z; G29 then returned immediately and M500 printed "Settings Stored".
-# Keep a 10mm probing inset inside the user-selected temporary map.
+# Marlin 2.1.2.8 defaults to 10mm for deploy/stow and only 5mm between points.
+# This MicroProbe extends far enough that 5mm is not safe on this machine.
+replace_once(
+    config,
+    """#define Z_CLEARANCE_DEPLOY_PROBE   10 // (mm) Z Clearance for Deploy/Stow\n#define Z_CLEARANCE_BETWEEN_PROBES  5 // (mm) Z Clearance between probe points\n""",
+    """#define Z_CLEARANCE_DEPLOY_PROBE   15 // (mm) Monster8 MicroProbe safe deploy/stow height\n#define Z_CLEARANCE_BETWEEN_PROBES 15 // (mm) Monster8 safe travel height between mesh points\n""",
+    "MicroProbe safe Z clearances",
+)
+
+# ---------------------------------------------------------------------------
+# 3) Temporary G29 area reliability
+# ---------------------------------------------------------------------------
+# Keep a 10mm probing inset inside the user-selected temporary map. Explicitly
+# lift to Z15 after the initial Z home before ANY XY mesh travel. E makes G29
+# stow after every sample; with normal Marlin deploy/stow clearance restored,
+# every stow raises to the safe height before the next XY move.
+#
+# Do NOT append M500 here. If G29 aborts, a following M500 still runs and gives
+# the misleading message "Settings Stored". Save manually only after 9/9.
 replace_once(
     bed,
     """static void m8_run_sized_mesh(const uint8_t points) {\n  char cmd[80];\n  snprintf_P(\n    cmd, sizeof(cmd),\n    PSTR(\"G28 Z\\nG29 P%u L0 R%i F0 B%i E V1\\nM500\"),\n    points, int(m8_mesh_x_mm), int(m8_mesh_y_mm)\n  );\n  queue.inject(cmd);\n}\n""",
-    """static void m8_run_sized_mesh(const uint8_t points) {\n  // Marlin normally keeps the probe away from the physical bed edge.\n  // The selected Map X / Map Y dimensions still describe the temporary\n  // work area from XY zero, but probing is inset 10mm on all four sides.\n  const int16_t map_right = m8_mesh_x_mm - 10,\n                map_back  = m8_mesh_y_mm - 10;\n  char cmd[96];\n  snprintf_P(\n    cmd, sizeof(cmd),\n    PSTR(\"G28 Z\\nG29 P%u L10 R%i F10 B%i E V1\\nM500\"),\n    points, int(map_right), int(map_back)\n  );\n  ui.set_status(F(\"Mesh: Home Z then probe\"));\n  queue.inject(cmd);\n}\n""",
-    "safe temporary mesh bounds",
+    """static void m8_run_sized_mesh(const uint8_t points) {\n  const int16_t map_right = m8_mesh_x_mm - 10,\n                map_back  = m8_mesh_y_mm - 10;\n  char cmd[112];\n  snprintf_P(\n    cmd, sizeof(cmd),\n    PSTR(\"G28 Z\\nG90\\nG1 Z15 F600\\nG29 P%u L10 R%i F10 B%i E V1\"),\n    points, int(map_right), int(map_back)\n  );\n  ui.set_status(F(\"Mesh: Z15 safe travel\"));\n  queue.inject(cmd);\n}\n""",
+    "safe temporary mesh bounds and travel lift",
 )
 
 # A map smaller than 40mm leaves too little usable space after the 10mm inset.
@@ -69,4 +85,4 @@ replace_once(
     "minimum temporary mesh size",
 )
 
-print("Applied MicroProbe cold-start conditioning, 500ms settle, and corrected G29 temporary-map bounds")
+print("Applied MicroProbe cold-start conditioning, 15mm mesh clearance, and corrected G29 temporary-map bounds")
