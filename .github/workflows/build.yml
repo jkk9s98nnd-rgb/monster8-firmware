@@ -100,6 +100,9 @@ jobs:
       - name: Apply custom config
         run: cp monster8-config.ini MarlinSource/Marlin/config.ini
 
+      - name: Add SD pause stop and finish parking
+        run: python patches/patch_sd_pause_park.py
+
       - name: Allow Z-only probe homing for CNC
         run: |
           python - <<'PY'
@@ -140,6 +143,6 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Monster8-Orca-AutoPrime-Firmware
+          name: Monster8-Orca-Pause-Park-Firmware
           path: output/mks_monster8.bin
           if-no-files-found: error
