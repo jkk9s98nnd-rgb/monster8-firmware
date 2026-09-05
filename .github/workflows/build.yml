@@ -103,6 +103,9 @@ jobs:
       - name: Add SD pause stop and finish parking
         run: python patches/patch_sd_pause_park.py
 
+      - name: Add wiper alignment wizard
+        run: python patches/patch_wiper_alignment.py
+
       - name: Allow Z-only probe homing for CNC
         run: |
           python - <<'PY'
@@ -143,6 +146,6 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Monster8-Orca-Pause-Park-Firmware
+          name: Monster8-Wiper-Alignment-Firmware
           path: output/mks_monster8.bin
           if-no-files-found: error
