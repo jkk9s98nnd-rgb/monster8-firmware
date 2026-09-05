@@ -118,6 +118,9 @@ jobs:
       - name: Keep wiper menu open and use direct Z nudges
         run: python patches/patch_wiper_v3.py
 
+      - name: Use direct blocking motion for calibrated wiper
+        run: python patches/patch_wiper_v4.py
+
       - name: Allow Z-only probe homing for CNC
         run: |
           python - <<'PY'
@@ -158,6 +161,6 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Monster8-Wiper-V3-Firmware
+          name: Monster8-Wiper-V4-Firmware
           path: output/mks_monster8.bin
           if-no-files-found: error
