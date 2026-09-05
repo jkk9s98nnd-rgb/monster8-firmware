@@ -45,9 +45,12 @@ if anchor not in s:
 
 helper = r'''
 
-// Monster8 external-print auto-prime. This is intentionally RAM-only so no
-// EEPROM layout changes can disturb the saved bed mesh or Z offset.
+// Monster8 external-print auto-prime. These values are intentionally RAM-only
+// so no EEPROM layout changes can disturb the saved bed mesh or Z offset.
 bool m8_auto_prime_lines = true;
+int16_t m8_auto_prime_length = 60;   // mm per line
+int16_t m8_auto_prime_count = 2;     // 1..3 lines
+int16_t m8_auto_prime_e = 9;         // mm of filament per line
 bool m8_auto_prime_home_seen = false;
 bool m8_auto_prime_heat_seen = false;
 bool m8_auto_prime_done = false;
@@ -62,25 +65,37 @@ void m8_auto_prime_try() {
   if (thermalManager.degHotend(0) < EXTRUDE_MINTEMP)
     return;
 
+  // Clamp editable LCD values to the reserved safe prime strip.
+  const int16_t plen = m8_auto_prime_length < 20 ? 20 : (m8_auto_prime_length > 100 ? 100 : m8_auto_prime_length);
+  const int16_t pcount = m8_auto_prime_count < 1 ? 1 : (m8_auto_prime_count > 3 ? 3 : m8_auto_prime_count);
+  const int16_t pe = m8_auto_prime_e < 1 ? 1 : (m8_auto_prime_e > 20 ? 20 : m8_auto_prime_e);
+  const int16_t xend = 10 + plen;
+
   // Mark done before executing the subcommands so this cannot recurse.
   m8_auto_prime_done = true;
   ui.set_status(F("Auto Prime Lines"));
 
-  // Fixed reserved prime strip inside the proven 200x200 work area.
-  // Two 30mm lines at Y10/Y12, intended for the current 0.8mm nozzle.
-  // Keep sliced models at Y22 or higher for ~10mm clearance from the strip.
-  gcode.process_subcommands_now(F(
-    "G90\n"
-    "M83\n"
-    "G1 Z0.40 F600\n"
-    "G1 X10 Y10 F3000\n"
-    "G92 E0\n"
-    "G1 X40 E4.50 F600\n"
-    "G1 Y12 F1200\n"
-    "G1 X10 E4.50 F600\n"
-    "G92 E0\n"
-    "G1 Z2.00 F600"
-  ));
+  // Build 1..3 alternating lines inside the proven 200x200 work area.
+  // Y positions are 10, 12, 14. With the default two lines, keep models at
+  // Y22 or higher; with three lines use Y24 or higher for ~10mm clearance.
+  // Prime positioning travel is capped at 40mm/s (F2400).
+  char cmd[256];
+  int used = snprintf_P(
+    cmd, sizeof(cmd),
+    PSTR("G90\nM83\nG1 Z0.40 F600\nG1 X10 Y10 F2400\nG92 E0\nG1 X%i E%i F600"),
+    int(xend), int(pe)
+  );
+
+  if (pcount >= 2 && used > 0 && used < int(sizeof(cmd)))
+    used += snprintf_P(cmd + used, sizeof(cmd) - used, PSTR("\nG1 Y12 F1200\nG1 X10 E%i F600"), int(pe));
+
+  if (pcount >= 3 && used > 0 && used < int(sizeof(cmd)))
+    used += snprintf_P(cmd + used, sizeof(cmd) - used, PSTR("\nG1 Y14 F1200\nG1 X%i E%i F600"), int(xend), int(pe));
+
+  if (used > 0 && used < int(sizeof(cmd)))
+    snprintf_P(cmd + used, sizeof(cmd) - used, PSTR("\nG92 E0\nG1 Z2.00 F600"));
+
+  gcode.process_subcommands_now(cmd);
 }
 '''
 
@@ -143,25 +158,45 @@ m109.write_text(s)
 
 
 # ---------------------------------------------------------------------------
-# LCD toggle. Default is ON. Turning it OFF restores ordinary slicer behavior.
+# LCD auto-prime controls. Defaults target the current 0.8mm nozzle:
+# 2 x 60mm lines with 9mm filament per line. Speed/Flow/Z Offset during an
+# external print are already provided by Marlin's Tune menu; XY Set/Go Zero
+# remain in Bed Level Setup so there is still only one master XY-zero control.
 # ---------------------------------------------------------------------------
 s = main.read_text()
 if 'extern bool m8_auto_prime_lines;' not in s:
     anchor = 'extern bool m8_ignore_xy_home;\n'
     if anchor not in s:
         raise SystemExit("Ignore XY Home LCD declaration not found")
-    s = s.replace(anchor, anchor + 'extern bool m8_auto_prime_lines;\n', 1)
+    s = s.replace(
+        anchor,
+        anchor
+        + 'extern bool m8_auto_prime_lines;\n'
+        + 'extern int16_t m8_auto_prime_length;\n'
+        + 'extern int16_t m8_auto_prime_count;\n'
+        + 'extern int16_t m8_auto_prime_e;\n',
+        1,
+    )
 
 line = '  EDIT_ITEM_F(bool, F("Ignore XY Home"), &m8_ignore_xy_home);\n'
 if line not in s:
     raise SystemExit("Ignore XY Home LCD item not found")
 if 'F("Auto Prime Lines")' not in s:
-    s = s.replace(line, line + '  EDIT_ITEM_F(bool, F("Auto Prime Lines"), &m8_auto_prime_lines);\n', 1)
+    s = s.replace(
+        line,
+        line
+        + '  EDIT_ITEM_F(bool, F("Auto Prime Lines"), &m8_auto_prime_lines);\n'
+        + '  EDIT_ITEM_F(int3, F("Prime Length mm"), &m8_auto_prime_length, 20, 100);\n'
+        + '  EDIT_ITEM_F(int3, F("Prime Lines"), &m8_auto_prime_count, 1, 3);\n'
+        + '  EDIT_ITEM_F(int3, F("Prime E/Line mm"), &m8_auto_prime_e, 1, 20);\n',
+        1,
+    )
 main.write_text(s)
 
 
 # ---------------------------------------------------------------------------
-# Regression guard: external auto-prime must not rewrite the working bed mesh.
+# Regression guards: external auto-prime must not rewrite the working bed mesh
+# or remove the single master XY-zero controls.
 # ---------------------------------------------------------------------------
 bed_text = bed.read_text()
 for required in [
@@ -169,8 +204,19 @@ for required in [
     'map_front = 10,',
     'PSTR("G28 Z\\nG90\\nG1 Z%i F600\\nG29 P%u L%i R%i F%i B%i E V1\\nM500")',
     'ACTION_ITEM_F(F("Run 3x3 Mesh"), m8_run_mesh_3);',
+    'GCODES_ITEM_F(F("1 Set XY Zero"), F("G92 X0 Y0"));',
+    'GCODES_ITEM_F(F("Go to XY Zero"), F("G90\\nG1 X0 Y0 F3000"));',
 ]:
     if required not in bed_text:
         raise SystemExit(f"Auto-prime refuses build: bed-level regression guard failed: {required}")
 
-print("Added selectable external Auto Prime Lines at X10..40, Y10/Y12 without changing bed leveling")
+for required in [
+    'int16_t m8_auto_prime_length = 60;',
+    'int16_t m8_auto_prime_count = 2;',
+    'int16_t m8_auto_prime_e = 9;',
+    'G1 X10 Y10 F2400',
+]:
+    if required not in g28.read_text():
+        raise SystemExit(f"Auto-prime control regression guard failed: {required}")
+
+print("Added adjustable external Auto Prime controls: 1..3 lines, 20..100mm length, 1..20mm E/line; preserved mesh and XY zero")
