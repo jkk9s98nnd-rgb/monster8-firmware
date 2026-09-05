@@ -121,6 +121,9 @@ jobs:
       - name: Use direct blocking motion for calibrated wiper
         run: python patches/patch_wiper_v4.py
 
+      - name: Set wiper default contact to Z3.50
+        run: python patches/patch_wiper_v5_default.py
+
       - name: Allow Z-only probe homing for CNC
         run: |
           python - <<'PY'
@@ -161,6 +164,6 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Monster8-Wiper-V4-Firmware
+          name: Monster8-Wiper-V5-Firmware
           path: output/mks_monster8.bin
           if-no-files-found: error
