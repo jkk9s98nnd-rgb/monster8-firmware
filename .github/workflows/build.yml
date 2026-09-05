@@ -109,6 +109,9 @@ jobs:
       - name: Add wiper calibration and automatic wiping
         run: python patches/patch_wiper_runtime.py
 
+      - name: Link wiper runtime into compiled source
+        run: python patches/patch_wiper_linkfix.py
+
       - name: Allow Z-only probe homing for CNC
         run: |
           python - <<'PY'
