@@ -34,7 +34,6 @@ replace_once(
     'pressure variables',
 )
 
-# Add state for initial preload and controlled layer retract/restart.
 replace_once(
     '  M8TC_SETUP_G91,\n  M8TC_PRIME_OFFSET,\n  M8TC_PRIME_LINE1,',
     '  M8TC_SETUP_G91,\n  M8TC_PRIME_OFFSET,\n  M8TC_PRIME_PRELOAD,\n  M8TC_PRIME_LINE1,',
@@ -47,9 +46,6 @@ replace_once(
     'layer pressure enum',
 )
 
-# Initial preload happens at the start of the waste prime strip, not on the
-# actual part. This turns the beginning of the prime line into useful purge
-# instead of spending the first 50-100mm rebuilding pressure.
 old_prime_offset = '''    case M8TC_PRIME_OFFSET:
       if (m8tc_enqueue_xy(0.0f, -8.0f, 1800)) {
         m8tc_state = M8TC_PRIME_LINE1;
@@ -73,15 +69,12 @@ new_prime_offset = '''    case M8TC_PRIME_OFFSET:
 '''
 replace_once(old_prime_offset, new_prime_offset, 'initial pressure preload')
 
-# When sparse infill is disabled, still go through the controlled layer-change
-# retract. That keeps behavior consistent for hollow/open tests too.
 replace_once(
     '        m8tc_infill_count = 0;\n        m8tc_state = M8TC_NEXT_LAYER;\n        break;\n',
     '        m8tc_infill_count = 0;\n        m8tc_state = M8TC_LAYER_RETRACT;\n        break;\n',
     'no-infill layer retract transition',
 )
 
-# After an infill return, use the same controlled pressure cycle.
 replace_once(
     '''    case M8TC_INFILL_RETURN:
       if (m8tc_enqueue_xy(-m8tc_x, -m8tc_y, 3000)) {
@@ -110,16 +103,13 @@ replace_once(
     'layer retract state',
 )
 
-# Restore the travel retract only after Z has moved to the new layer, then add
-# a small extra restart amount. This means the very first perimeter segment is
-# already pressurized instead of rebuilding pressure while moving.
+# The STOP patch inserts abort states between LAYER_Z and FINISH_LIFT, so only
+# replace the LAYER_Z block itself and insert restart immediately after it.
 replace_once(
     '''    case M8TC_LAYER_Z:
       if (m8tc_enqueue_z_relative(m8tc_layer_h))
         m8tc_state = M8TC_OUTER_START;
       break;
-
-    case M8TC_FINISH_LIFT:
 ''',
     '''    case M8TC_LAYER_Z:
       if (m8tc_enqueue_z_relative(m8tc_layer_h))
@@ -131,15 +121,10 @@ replace_once(
       if (restore <= 0.0f || m8tc_enqueue_e(restore, 1200))
         m8tc_state = M8TC_OUTER_START;
     } break;
-
-    case M8TC_FINISH_LIFT:
 ''',
     'layer pressure restart state',
 )
 
-# LCD tuning controls so pressure can be dialed in without another firmware
-# rebuild. Start Preload is whole mm of filament; the two layer values are
-# tenths of a millimeter to allow fine direct-drive tuning.
 replace_once(
     '    EDIT_ITEM_F(bool, F("Top Fill"), &m8tc_top_fill);\n',
     '    EDIT_ITEM_F(bool, F("Top Fill"), &m8tc_top_fill);\n'
