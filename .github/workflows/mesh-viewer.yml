@@ -1,0 +1,47 @@
+name: Build Monster8 Mesh Viewer
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'tools/mesh_viewer/**'
+      - '.github/workflows/mesh-viewer.yml'
+  workflow_dispatch:
+
+jobs:
+  build-viewer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip numpy matplotlib pyinstaller
+
+      - name: Test mesh parser and analysis
+        shell: pwsh
+        run: |
+          python -m py_compile tools/mesh_viewer/monster8_mesh_viewer.py
+          python -c "import importlib.util; p='tools/mesh_viewer/monster8_mesh_viewer.py'; s=importlib.util.spec_from_file_location('m8',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); meta,pts=m.parse_mesh_file('tools/mesh_viewer/sample/MESH0001.CSV'); a=m.analyze_mesh(pts); assert len(pts)==9; assert a['z_range']>0; print('Mesh viewer parser/analysis OK:', a['tilt_range'], a['warp_range'])"
+
+      - name: Build Windows EXE
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name Monster8MeshViewer tools/mesh_viewer/monster8_mesh_viewer.py
+
+      - name: Package viewer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path viewer_output | Out-Null
+          Copy-Item dist/Monster8MeshViewer.exe viewer_output/Monster8MeshViewer.exe
+          Copy-Item tools/mesh_viewer/sample/MESH0001.CSV viewer_output/MESH0001_SAMPLE.CSV
+
+      - name: Upload Windows viewer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Monster8-Mesh-Viewer-Windows
+          path: viewer_output/*
+          if-no-files-found: error
