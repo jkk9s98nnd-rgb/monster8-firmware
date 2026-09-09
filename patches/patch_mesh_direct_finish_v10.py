@@ -88,3 +88,7 @@ for required in [
         raise SystemExit(f"V10 G29 regression guard missing: {required}")
 
 print("Monster8 V10: successful LCD mesh now directly saves, lifts 10mm, and blocks until X0 Y0 return is complete")
+
+# V11 is intentionally chained here so the existing firmware workflow picks it
+# up without disturbing the long, proven patch order above.
+exec(Path("patches/patch_mesh_sd_export_v11.py").read_text(), {"__name__": "__main__"})
