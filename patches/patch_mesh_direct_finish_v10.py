@@ -12,13 +12,8 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
     path.write_text(text.replace(old, new, 1))
 
 
-# ---------------------------------------------------------------------------
-# V10: Do the post-mesh save / lift / X0 Y0 return directly inside G29.
-# V8/V9 appended commands after G29 in the LCD injected string. The mesh itself
-# completed but the commands after G29 were not reliable on this machine.
-# Instead, arm a one-shot flag and finish synchronously inside G29 itself.
-# ---------------------------------------------------------------------------
-
+# V10: finish successful LCD leveling directly inside G29 instead of depending
+# on queued commands after G29.
 replace_once(
     g29,
     '#include "../../../module/probe.h"\n',
@@ -33,9 +28,6 @@ replace_once(
     "G29 LCD mesh finish flag",
 )
 
-# Probe Search was added to the bed-menu extern after the original diagnostics
-# patch, so insert our flag after the stable last-X/Y line instead of replacing
-# the entire diagnostics block.
 replace_once(
     bed,
     '  extern int16_t m8_mesh_last_x, m8_mesh_last_y;\n#endif\n',
@@ -50,10 +42,12 @@ replace_once(
     "remove queued post-G29 tail",
 )
 
+# There is one runtime mesh queue injection in this menu. Arm the direct finish
+# immediately before it without depending on what helper follows the function.
 replace_once(
     bed,
-    '''  queue.inject(cmd);\n}\n\nstatic void m8_show_last_mesh() {\n''',
-    '''  m8_lcd_mesh_finish_pending = true;\n  queue.inject(cmd);\n}\n\nstatic void m8_show_last_mesh() {\n''',
+    '  queue.inject(cmd);\n',
+    '  m8_lcd_mesh_finish_pending = true;\n  queue.inject(cmd);\n',
     "arm direct G29 finish action",
 )
 
