@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 root = Path("MarlinSource/Marlin")
 bed = root / "src/lcd/menu/menu_bed_leveling.cpp"
@@ -14,31 +15,32 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 1) The V8 post-mesh command became longer than the original 80-byte runtime
-#    command buffer. That could truncate the tail, which explains why the mesh
-#    completed but the Z lift / X0 Y0 return didn't run (and could also cut off
-#    M500 depending on formatted coordinate widths). Make the buffer comfortably
-#    large and explicitly enable the fresh mesh before saving it.
+# 1) The V8 post-mesh command became longer than the original runtime command
+#    buffer. That can truncate the tail, which explains why probing finished but
+#    the Z lift / X0 Y0 return didn't run. Enlarge only the Monster8 mesh helper
+#    buffer and explicitly enable the fresh mesh before saving it.
 # ---------------------------------------------------------------------------
-replace_once(
-    bed,
-    "  char cmd[80];\n",
-    "  char cmd[160];\n",
-    "expand mesh command buffer",
-)
-
-replace_once(
-    bed,
-    'PSTR("G28 Z\\nG90\\nG1 Z%i F600\\nG29 P%u L%i R%i F%i B%i E V1\\nM500\\nG91\\nG1 Z10 F600\\nG90\\nG1 X0 Y0 F2400")',
-    'PSTR("G28 Z\\nG90\\nG1 Z%i F600\\nG29 P%u L%i R%i F%i B%i E V1\\nM420 S1\\nM500\\nG91\\nG1 Z10 F600\\nG90\\nG1 X0 Y0 F2400")',
-    "enable save and return after mesh",
-)
+bed_text = bed.read_text()
+start = bed_text.find("static void m8_run_sized_mesh(const uint8_t points)")
+end = bed_text.find("static void m8_run_mesh_3", start)
+if start < 0 or end < 0:
+    raise SystemExit("V9: Monster8 mesh helper block not found")
+segment = bed_text[start:end]
+segment, n = re.subn(r"char cmd\[\d+\];", "char cmd[160];", segment, count=1)
+if n != 1:
+    raise SystemExit("V9: mesh command buffer declaration not found")
+old_tail = r'\nM500\nG91\nG1 Z10 F600\nG90\nG1 X0 Y0 F2400'
+new_tail = r'\nM420 S1\nM500\nG91\nG1 Z10 F600\nG90\nG1 X0 Y0 F2400'
+if old_tail not in segment:
+    raise SystemExit("V9: V8 post-mesh command tail not found")
+segment = segment.replace(old_tail, new_tail, 1)
+bed.write_text(bed_text[:start] + segment + bed_text[end:])
 
 
 # ---------------------------------------------------------------------------
 # 2) Bilinear Marlin saves the mesh values in EEPROM, but unlike UBL it stores
-#    the active-state flag as false. On the Monster8 we always want a valid saved
-#    bilinear mesh to come back active after a power cycle / M501.
+#    the active-state flag as false. On the Monster8 a valid saved bilinear mesh
+#    should come back active after a power cycle / M501.
 #
 #    Settings load happens before normal motion, so set the planner flag directly
 #    rather than applying a coordinate correction to an un-homed position.
