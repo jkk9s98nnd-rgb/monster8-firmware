@@ -28,19 +28,34 @@ jobs:
         shell: pwsh
         run: dotnet restore 'UniversalVideoPlayerPro/src/UniversalVideoPlayerPro.csproj' -r win-x64
 
-      - name: Publish self-contained Windows build
+      - name: Build self-contained Windows Release
         shell: pwsh
-        run: dotnet publish 'UniversalVideoPlayerPro/src/UniversalVideoPlayerPro.csproj' -c Release -r win-x64 -p:Platform=x64 -p:SelfContained=true -p:WindowsAppSDKSelfContained=true -p:PublishSingleFile=false --no-restore -o 'publish'
+        run: dotnet build 'UniversalVideoPlayerPro/src/UniversalVideoPlayerPro.csproj' -c Release -r win-x64 -p:Platform=x64 -p:SelfContained=true -p:WindowsAppSDKSelfContained=true --no-restore -o 'releasebuild'
 
-      - name: Package ready-to-run ZIP
+      - name: Verify executable and smoke-test launch
         shell: pwsh
         run: |
-          Compress-Archive -Path 'publish/*' -DestinationPath 'UniversalVideoPlayerPro_v0.1_Windows_x64.zip' -Force
+          $exe = Resolve-Path 'releasebuild/UniversalVideoPlayerPro.exe'
+          Write-Host "Testing $exe"
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 8
+          $p.Refresh()
+          if ($p.HasExited) {
+            Write-Error "UniversalVideoPlayerPro exited during startup. Exit code: $($p.ExitCode)"
+            exit 1
+          }
+          Write-Host "Process is still running after startup test. MainWindowHandle=$($p.MainWindowHandle)"
+          Stop-Process -Id $p.Id -Force
 
-      - name: Upload ready-to-run build
+      - name: Package tested ready-to-run ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path 'releasebuild/*' -DestinationPath 'UniversalVideoPlayerPro_v0.1b_Windows_x64.zip' -Force
+
+      - name: Upload tested ready-to-run build
         uses: actions/upload-artifact@v4
         with:
-          name: UniversalVideoPlayerPro-v0.1-Windows-x64
-          path: UniversalVideoPlayerPro_v0.1_Windows_x64.zip
+          name: UniversalVideoPlayerPro-v0.1b-Windows-x64-tested
+          path: UniversalVideoPlayerPro_v0.1b_Windows_x64.zip
           if-no-files-found: error
           retention-days: 14
