@@ -52,12 +52,12 @@ public sealed partial class MainWindow : Window
 
     private static readonly SkinPalette[] Skins =
     {
-        new("Midnight",   Hex("#0A0E17"), Hex("#E8141B28"), Hex("#F0182030"), Hex("#4C8DFF"), ElementTheme.Dark),
-        new("Ocean",      Hex("#061418"), Hex("#E80C252D"), Hex("#F0102D36"), Hex("#20B8D8"), ElementTheme.Dark),
-        new("Emerald",    Hex("#07130D"), Hex("#E811241A"), Hex("#F0142B20"), Hex("#31C979"), ElementTheme.Dark),
-        new("Violet",     Hex("#100A18"), Hex("#E8201530"), Hex("#F0251939"), Hex("#A56EFF"), ElementTheme.Dark),
-        new("Crimson",    Hex("#16090D"), Hex("#E8291118"), Hex("#F030141D"), Hex("#F05265"), ElementTheme.Dark),
-        new("Frost Light",Hex("#EEF3F8"), Hex("#F7FFFFFF"), Hex("#FFF7F9FC"), Hex("#3677E8"), ElementTheme.Light)
+        new("Midnight",    Hex("#0A0E17"), Hex("#E8141B28"), Hex("#F0182030"), Hex("#4C8DFF"), ElementTheme.Dark),
+        new("Ocean",       Hex("#061418"), Hex("#E80C252D"), Hex("#F0102D36"), Hex("#20B8D8"), ElementTheme.Dark),
+        new("Emerald",     Hex("#07130D"), Hex("#E811241A"), Hex("#F0142B20"), Hex("#31C979"), ElementTheme.Dark),
+        new("Violet",      Hex("#100A18"), Hex("#E8201530"), Hex("#F0251939"), Hex("#A56EFF"), ElementTheme.Dark),
+        new("Crimson",     Hex("#16090D"), Hex("#E8291118"), Hex("#F030141D"), Hex("#F05265"), ElementTheme.Dark),
+        new("Frost Light", Hex("#EEF3F8"), Hex("#F7FFFFFF"), Hex("#FFF7F9FC"), Hex("#3677E8"), ElementTheme.Light)
     };
 
     public MainWindow()
@@ -147,18 +147,17 @@ public sealed partial class MainWindow : Window
         ControlDeck.Background = Brush(skin.PanelSecondary);
         PlayerFrame.Background = Brush(skin.Accent);
 
-        var accent = Brush(skin.Accent);
-        LogoBadge.Background = accent;
+        LogoBadge.Background = Brush(skin.Accent);
         ProBadge.Background = Brush(skin.Accent);
         EmptyPlayBadge.Background = Brush(skin.Accent);
         PlayPauseButton.Background = Brush(skin.Accent);
         PlayPauseButton.BorderBrush = Brush(skin.Accent);
         OpenVideoButton.Background = Brush(skin.Accent);
         OpenVideoButton.BorderBrush = Brush(skin.Accent);
-        OpenVideoButton.Foreground = new SolidColorBrush(Colors.White);
+        OpenVideoButton.Foreground = Brush(Hex("#FFFFFF"));
         EmptyOpenButton.Background = Brush(skin.Accent);
         EmptyOpenButton.BorderBrush = Brush(skin.Accent);
-        EmptyOpenButton.Foreground = new SolidColorBrush(Colors.White);
+        EmptyOpenButton.Foreground = Brush(Hex("#FFFFFF"));
         SeekSlider.Foreground = Brush(skin.Accent);
         VolumeSlider.Foreground = Brush(skin.Accent);
 
