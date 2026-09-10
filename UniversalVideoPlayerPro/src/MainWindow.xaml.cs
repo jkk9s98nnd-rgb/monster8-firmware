@@ -9,6 +9,7 @@ using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
 using Windows.System;
+using Windows.UI;
 using WinRT.Interop;
 
 namespace UniversalVideoPlayerPro;
@@ -22,6 +23,12 @@ public sealed partial class MainWindow : Window
     private AppWindow? _appWindow;
     private bool _updatingSeek;
     private bool _isFullScreen;
+    private bool _uiReady;
+
+    private static readonly string SettingsDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "UniversalVideoPlayerPro");
+    private static readonly string SkinSettingsPath = Path.Combine(SettingsDirectory, "skin.txt");
 
     private static readonly string[] MediaExtensions =
     {
@@ -35,11 +42,32 @@ public sealed partial class MainWindow : Window
         ".hevc", ".h265", ".265"
     };
 
+    private sealed record SkinPalette(
+        string Name,
+        Color Background,
+        Color Panel,
+        Color PanelSecondary,
+        Color Accent,
+        ElementTheme Theme);
+
+    private static readonly SkinPalette[] Skins =
+    {
+        new("Midnight",   Hex("#0A0E17"), Hex("#E8141B28"), Hex("#F0182030"), Hex("#4C8DFF"), ElementTheme.Dark),
+        new("Ocean",      Hex("#061418"), Hex("#E80C252D"), Hex("#F0102D36"), Hex("#20B8D8"), ElementTheme.Dark),
+        new("Emerald",    Hex("#07130D"), Hex("#E811241A"), Hex("#F0142B20"), Hex("#31C979"), ElementTheme.Dark),
+        new("Violet",     Hex("#100A18"), Hex("#E8201530"), Hex("#F0251939"), Hex("#A56EFF"), ElementTheme.Dark),
+        new("Crimson",    Hex("#16090D"), Hex("#E8291118"), Hex("#F030141D"), Hex("#F05265"), ElementTheme.Dark),
+        new("Frost Light",Hex("#EEF3F8"), Hex("#F7FFFFFF"), Hex("#FFF7F9FC"), Hex("#3677E8"), ElementTheme.Light)
+    };
+
     public MainWindow()
     {
         InitializeComponent();
+        _uiReady = true;
+
         ConfigureWindow();
         TryApplyMica();
+        LoadSavedSkin();
 
         Player.SetMediaPlayer(_mediaPlayer);
         _mediaPlayer.Volume = 0.80;
@@ -56,13 +84,96 @@ public sealed partial class MainWindow : Window
         var hwnd = WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
         _appWindow = AppWindow.GetFromWindowId(windowId);
-        _appWindow.Resize(new Windows.Graphics.SizeInt32(1280, 760));
+        _appWindow.Resize(new Windows.Graphics.SizeInt32(1280, 780));
+        _appWindow.Title = "Universal Video Player Pro";
     }
 
     private void TryApplyMica()
     {
         try { SystemBackdrop = new MicaBackdrop(); }
         catch { }
+    }
+
+    private static Color Hex(string value)
+    {
+        var s = value.TrimStart('#');
+        byte a = 255;
+        int offset = 0;
+        if (s.Length == 8)
+        {
+            a = Convert.ToByte(s.Substring(0, 2), 16);
+            offset = 2;
+        }
+        return Color.FromArgb(
+            a,
+            Convert.ToByte(s.Substring(offset, 2), 16),
+            Convert.ToByte(s.Substring(offset + 2, 2), 16),
+            Convert.ToByte(s.Substring(offset + 4, 2), 16));
+    }
+
+    private static SolidColorBrush Brush(Color color) => new(color);
+
+    private void LoadSavedSkin()
+    {
+        string skinName = "Midnight";
+        try
+        {
+            if (File.Exists(SkinSettingsPath))
+                skinName = File.ReadAllText(SkinSettingsPath).Trim();
+        }
+        catch { }
+
+        var index = Array.FindIndex(Skins, s => s.Name.Equals(skinName, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) index = 0;
+        SkinComboBox.SelectedIndex = index;
+        ApplySkin(Skins[index], save: false);
+    }
+
+    private void SaveSkin(string skinName)
+    {
+        try
+        {
+            Directory.CreateDirectory(SettingsDirectory);
+            File.WriteAllText(SkinSettingsPath, skinName);
+        }
+        catch { }
+    }
+
+    private void ApplySkin(SkinPalette skin, bool save)
+    {
+        RootGrid.RequestedTheme = skin.Theme;
+        RootGrid.Background = Brush(skin.Background);
+        HeaderBar.Background = Brush(skin.Panel);
+        ControlDeck.Background = Brush(skin.PanelSecondary);
+        PlayerFrame.Background = Brush(skin.Accent);
+
+        var accent = Brush(skin.Accent);
+        LogoBadge.Background = accent;
+        ProBadge.Background = Brush(skin.Accent);
+        EmptyPlayBadge.Background = Brush(skin.Accent);
+        PlayPauseButton.Background = Brush(skin.Accent);
+        PlayPauseButton.BorderBrush = Brush(skin.Accent);
+        OpenVideoButton.Background = Brush(skin.Accent);
+        OpenVideoButton.BorderBrush = Brush(skin.Accent);
+        OpenVideoButton.Foreground = new SolidColorBrush(Colors.White);
+        EmptyOpenButton.Background = Brush(skin.Accent);
+        EmptyOpenButton.BorderBrush = Brush(skin.Accent);
+        EmptyOpenButton.Foreground = new SolidColorBrush(Colors.White);
+        SeekSlider.Foreground = Brush(skin.Accent);
+        VolumeSlider.Foreground = Brush(skin.Accent);
+
+        if (save)
+            SaveSkin(skin.Name);
+    }
+
+    private void SkinComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_uiReady || SkinComboBox.SelectedItem is not ComboBoxItem item)
+            return;
+
+        var name = item.Tag?.ToString() ?? "Midnight";
+        var skin = Skins.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) ?? Skins[0];
+        ApplySkin(skin, save: true);
     }
 
     private FileOpenPicker CreateVideoPicker()
@@ -178,7 +289,7 @@ public sealed partial class MainWindow : Window
         if (_appWindow == null) return;
         _isFullScreen = !_isFullScreen;
         _appWindow.SetPresenter(_isFullScreen ? AppWindowPresenterKind.FullScreen : AppWindowPresenterKind.Default);
-        FullScreenButton.Content = _isFullScreen ? "Exit full screen" : "Full screen";
+        FullScreenText.Text = _isFullScreen ? "Exit full screen" : "Full screen";
     }
 
     private async void HevcButton_Click(object sender, RoutedEventArgs e)
@@ -253,7 +364,8 @@ public sealed partial class MainWindow : Window
 
     private void PlaybackSession_PlaybackStateChanged(MediaPlaybackSession sender, object args)
     {
-        DispatcherQueue.TryEnqueue(() => PlayPauseButton.Content = sender.PlaybackState == MediaPlaybackState.Playing ? "Ⅱ" : "▶");
+        DispatcherQueue.TryEnqueue(() =>
+            PlayPauseIcon.Glyph = sender.PlaybackState == MediaPlaybackState.Playing ? "\uE769" : "\uE768");
     }
 
     private void RootGrid_DragOver(object sender, DragEventArgs e)
