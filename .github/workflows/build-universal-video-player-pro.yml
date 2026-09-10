@@ -1,0 +1,53 @@
+name: Build Universal Video Player Pro
+
+on:
+  push:
+    branches:
+      - universal-video-player-pro-build
+    paths:
+      - 'UniversalVideoPlayerPro/**'
+      - '.github/workflows/build-universal-video-player-pro.yml'
+  workflow_dispatch:
+
+jobs:
+  build-windows-x64:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout build branch
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Recreate source archive
+        shell: pwsh
+        run: |
+          $b64 = Get-Content 'UniversalVideoPlayerPro/build-input/UniversalVideoPlayerPro_v0.1_Source.zip.b64' -Raw
+          [IO.File]::WriteAllBytes('UniversalVideoPlayerPro_Source.zip', [Convert]::FromBase64String($b64.Trim()))
+          Expand-Archive -Path 'UniversalVideoPlayerPro_Source.zip' -DestinationPath 'buildsrc' -Force
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore 'buildsrc/UniversalVideoPlayerPro/UniversalVideoPlayerPro.csproj' -r win-x64
+
+      - name: Publish self-contained Windows build
+        shell: pwsh
+        run: dotnet publish 'buildsrc/UniversalVideoPlayerPro/UniversalVideoPlayerPro.csproj' -c Release -r win-x64 -p:Platform=x64 -p:SelfContained=true -p:WindowsAppSDKSelfContained=true -p:PublishProfile= -p:PublishSingleFile=false --no-restore -o 'publish'
+
+      - name: Package ready-to-run ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path 'publish/*' -DestinationPath 'UniversalVideoPlayerPro_v0.1_Windows_x64.zip' -Force
+
+      - name: Upload ready-to-run build
+        uses: actions/upload-artifact@v4
+        with:
+          name: UniversalVideoPlayerPro-v0.1-Windows-x64
+          path: UniversalVideoPlayerPro_v0.1_Windows_x64.zip
+          if-no-files-found: error
+          retention-days: 14
