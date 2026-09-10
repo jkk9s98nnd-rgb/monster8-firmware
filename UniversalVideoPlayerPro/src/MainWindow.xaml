@@ -7,59 +7,115 @@
     <Grid x:Name="RootGrid"
           AllowDrop="True"
           DragOver="RootGrid_DragOver"
-          Drop="RootGrid_Drop"
-          Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+          Drop="RootGrid_Drop">
+
+        <Grid.Resources>
+            <Style x:Key="RoundControlButtonStyle" TargetType="Button">
+                <Setter Property="Width" Value="46" />
+                <Setter Property="Height" Value="46" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="CornerRadius" Value="23" />
+                <Setter Property="FontSize" Value="16" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+            <Style x:Key="SoftButtonStyle" TargetType="Button">
+                <Setter Property="Height" Value="38" />
+                <Setter Property="Padding" Value="14,0" />
+                <Setter Property="CornerRadius" Value="12" />
+            </Style>
+            <Style x:Key="CompactComboStyle" TargetType="ComboBox">
+                <Setter Property="Height" Value="38" />
+                <Setter Property="CornerRadius" Value="12" />
+            </Style>
+        </Grid.Resources>
+
         <Grid.RowDefinitions>
-            <RowDefinition Height="58" />
+            <RowDefinition Height="72" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="104" />
+            <RowDefinition Height="132" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Padding="16,9" BorderThickness="0,0,0,1"
-                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+        <!-- Top app bar -->
+        <Border x:Name="HeaderBar" Grid.Row="0" Margin="14,12,14,6" CornerRadius="16" Padding="16,8">
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <Border Width="34" Height="34" CornerRadius="9"
-                            Background="{ThemeResource AccentFillColorDefaultBrush}">
-                        <TextBlock Text="▶" Foreground="White" FontSize="15"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <Border x:Name="LogoBadge" Width="42" Height="42" CornerRadius="13">
+                        <FontIcon Glyph="&#xE768;" FontSize="18" Foreground="White"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="Universal Video Player Pro" FontSize="18" FontWeight="SemiBold" />
-                        <TextBlock x:Name="FileNameText" Text="Ready" FontSize="11" Opacity="0.65"
+                    <StackPanel VerticalAlignment="Center" Spacing="1">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Universal Video Player" FontSize="18" FontWeight="SemiBold" />
+                            <Border x:Name="ProBadge" CornerRadius="7" Padding="7,2" VerticalAlignment="Center">
+                                <TextBlock Text="PRO" FontSize="10" FontWeight="Bold" Foreground="White" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock x:Name="FileNameText" Text="Ready to play" FontSize="11" Opacity="0.62"
                                    MaxWidth="720" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </StackPanel>
+
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <Button Content="HEVC" Click="HevcButton_Click" ToolTipService.ToolTip="Check HEVC support" />
-                    <Button Content="Open video" Click="OpenButton_Click" Style="{ThemeResource AccentButtonStyle}" />
+                    <ComboBox x:Name="SkinComboBox" Width="142" SelectedIndex="0"
+                              Style="{StaticResource CompactComboStyle}"
+                              SelectionChanged="SkinComboBox_SelectionChanged"
+                              ToolTipService.ToolTip="Change player skin">
+                        <ComboBoxItem Content="Midnight" Tag="Midnight" />
+                        <ComboBoxItem Content="Ocean" Tag="Ocean" />
+                        <ComboBoxItem Content="Emerald" Tag="Emerald" />
+                        <ComboBoxItem Content="Violet" Tag="Violet" />
+                        <ComboBoxItem Content="Crimson" Tag="Crimson" />
+                        <ComboBoxItem Content="Frost Light" Tag="Frost Light" />
+                    </ComboBox>
+                    <Button Content="HEVC" Click="HevcButton_Click" Style="{StaticResource SoftButtonStyle}"
+                            ToolTipService.ToolTip="Check HEVC support" />
+                    <Button x:Name="OpenVideoButton" Click="OpenButton_Click" Style="{StaticResource SoftButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8E5;" FontSize="14" />
+                            <TextBlock Text="Open video" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" Background="#050505">
-            <MediaPlayerElement x:Name="Player" AreTransportControlsEnabled="False" AutoPlay="False" Stretch="Uniform" />
+        <!-- Video stage -->
+        <Border x:Name="PlayerFrame" Grid.Row="1" Margin="14,6,14,10" CornerRadius="20" Padding="1">
+            <Border x:Name="VideoPanel" CornerRadius="19" Background="#050505" Clip="{x:Null}">
+                <Grid>
+                    <MediaPlayerElement x:Name="Player" AreTransportControlsEnabled="False"
+                                        AutoPlay="False" Stretch="Uniform" />
 
-            <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-                <TextBlock Text="▶" FontSize="58" HorizontalAlignment="Center" Foreground="White" Opacity="0.9" />
-                <TextBlock Text="Open or drop a video here" FontSize="22" FontWeight="SemiBold"
-                           Foreground="White" HorizontalAlignment="Center" />
-                <TextBlock Text="MP4 • MKV • MOV • AVI • WMV • WebM • MTS • M2TS • MPEG and more"
-                           FontSize="12" Foreground="White" Opacity="0.58" HorizontalAlignment="Center" />
-                <Button Content="Choose a video" Click="OpenButton_Click" HorizontalAlignment="Center" Margin="0,8,0,0" />
-            </StackPanel>
+                    <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                        <Border x:Name="EmptyPlayBadge" Width="78" Height="78" CornerRadius="39" Opacity="0.95">
+                            <FontIcon Glyph="&#xE768;" FontSize="30" Foreground="White"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="Drop a video anywhere" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="White" HorizontalAlignment="Center" />
+                        <TextBlock Text="or choose a file to start watching" FontSize="13"
+                                   Foreground="White" Opacity="0.60" HorizontalAlignment="Center" />
+                        <Button x:Name="EmptyOpenButton" Content="Choose a video" Click="OpenButton_Click"
+                                Style="{StaticResource SoftButtonStyle}" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                        <TextBlock Text="MP4  •  MKV  •  MOV  •  AVI  •  WMV  •  WebM  •  MTS  •  MPEG  •  HEVC"
+                                   FontSize="11" Foreground="White" Opacity="0.40" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                    </StackPanel>
 
-            <InfoBar x:Name="StatusInfoBar" IsOpen="False" IsClosable="True"
-                     HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="16" />
-        </Grid>
+                    <InfoBar x:Name="StatusInfoBar" IsOpen="False" IsClosable="True"
+                             HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="16" />
+                </Grid>
+            </Border>
+        </Border>
 
-        <Border Grid.Row="2" Padding="16,8,16,12" BorderThickness="0,1,0,0"
-                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
-            <Grid RowSpacing="7">
+        <!-- Modern control deck -->
+        <Border x:Name="ControlDeck" Grid.Row="2" Margin="14,0,14,14" CornerRadius="18" Padding="18,12">
+            <Grid RowSpacing="10">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -71,10 +127,10 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="CurrentTimeText" Text="00:00" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock x:Name="CurrentTimeText" Text="00:00" FontSize="12" Opacity="0.72" VerticalAlignment="Center" />
                     <Slider x:Name="SeekSlider" Grid.Column="1" Minimum="0" Maximum="1" Value="0"
                             StepFrequency="0.1" ValueChanged="SeekSlider_ValueChanged" />
-                    <TextBlock x:Name="DurationText" Grid.Column="2" Text="00:00" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock x:Name="DurationText" Grid.Column="2" Text="00:00" FontSize="12" Opacity="0.72" VerticalAlignment="Center" />
                 </Grid>
 
                 <Grid Grid.Row="1" ColumnSpacing="8">
@@ -83,26 +139,39 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="18" />
+                        <ColumnDefinition Width="24" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="140" />
-                        <ColumnDefinition Width="18" />
+                        <ColumnDefinition Width="120" />
+                        <ColumnDefinition Width="16" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <Button Grid.Column="0" Content="−10" Width="48" Click="Back10Button_Click" />
-                    <Button Grid.Column="1" x:Name="PlayPauseButton" Content="▶" Width="48" FontSize="18" Click="PlayPauseButton_Click" />
-                    <Button Grid.Column="2" Content="+10" Width="48" Click="Forward10Button_Click" />
-                    <Button Grid.Column="3" Content="■" Width="42" Click="StopButton_Click" />
+                    <Button Grid.Column="0" Click="Back10Button_Click" Style="{StaticResource RoundControlButtonStyle}"
+                            ToolTipService.ToolTip="Back 10 seconds">
+                        <FontIcon Glyph="&#xE892;" FontSize="17" />
+                    </Button>
+                    <Button Grid.Column="1" x:Name="PlayPauseButton" Click="PlayPauseButton_Click"
+                            Style="{StaticResource RoundControlButtonStyle}" ToolTipService.ToolTip="Play / Pause">
+                        <FontIcon x:Name="PlayPauseIcon" Glyph="&#xE768;" FontSize="18" Foreground="White" />
+                    </Button>
+                    <Button Grid.Column="2" Click="Forward10Button_Click" Style="{StaticResource RoundControlButtonStyle}"
+                            ToolTipService.ToolTip="Forward 10 seconds">
+                        <FontIcon Glyph="&#xE893;" FontSize="17" />
+                    </Button>
+                    <Button Grid.Column="3" Click="StopButton_Click" Style="{StaticResource RoundControlButtonStyle}"
+                            ToolTipService.ToolTip="Stop">
+                        <FontIcon Glyph="&#xE71A;" FontSize="15" />
+                    </Button>
 
-                    <TextBlock Grid.Column="5" Text="Volume" VerticalAlignment="Center" FontSize="12" Opacity="0.75" />
+                    <FontIcon Grid.Column="5" Glyph="&#xE767;" FontSize="15" Opacity="0.70" VerticalAlignment="Center" />
                     <Slider x:Name="VolumeSlider" Grid.Column="6" Minimum="0" Maximum="100" Value="80"
                             ValueChanged="VolumeSlider_ValueChanged" />
 
                     <ComboBox x:Name="SpeedComboBox" Grid.Column="8" Width="86" SelectedIndex="3"
+                              Style="{StaticResource CompactComboStyle}"
                               SelectionChanged="SpeedComboBox_SelectionChanged">
                         <ComboBoxItem Content="0.5×" Tag="0.5" />
                         <ComboBoxItem Content="0.75×" Tag="0.75" />
@@ -113,8 +182,21 @@
                         <ComboBoxItem Content="2.0×" Tag="2.0" />
                     </ComboBox>
 
-                    <Button Grid.Column="9" Content="Subtitles" Click="SubtitleButton_Click" />
-                    <Button Grid.Column="11" x:Name="FullScreenButton" Content="Full screen" Click="FullScreenButton_Click" />
+                    <Button Grid.Column="9" Click="SubtitleButton_Click" Style="{StaticResource SoftButtonStyle}"
+                            ToolTipService.ToolTip="Load subtitles">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <FontIcon Glyph="&#xE8D2;" FontSize="14" />
+                            <TextBlock Text="Subtitles" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Grid.Column="11" x:Name="FullScreenButton" Click="FullScreenButton_Click"
+                            Style="{StaticResource SoftButtonStyle}" ToolTipService.ToolTip="Full screen">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <FontIcon Glyph="&#xE740;" FontSize="14" />
+                            <TextBlock x:Name="FullScreenText" Text="Full screen" />
+                        </StackPanel>
+                    </Button>
                 </Grid>
             </Grid>
         </Border>
