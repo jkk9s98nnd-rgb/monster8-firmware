@@ -1,0 +1,165 @@
+name: Package Universal Video Player Pro for Microsoft Store
+
+on:
+  push:
+    branches:
+      - universal-video-player-pro-build
+    paths:
+      - 'UniversalVideoPlayerPro/src/**'
+      - 'UniversalVideoPlayerPro/store/**'
+      - '.github/workflows/package-universal-video-player-pro-store.yml'
+  workflow_dispatch:
+
+jobs:
+  package-store-x64:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout build branch
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore player
+        shell: pwsh
+        run: dotnet restore 'UniversalVideoPlayerPro/src/UniversalVideoPlayerPro.csproj' -r win-x64
+
+      - name: Build self-contained Windows Release
+        shell: pwsh
+        run: dotnet build 'UniversalVideoPlayerPro/src/UniversalVideoPlayerPro.csproj' -c Release -r win-x64 -p:Platform=x64 -p:SelfContained=true -p:WindowsAppSDKSelfContained=true --no-restore -o 'releasebuild'
+
+      - name: Smoke-test player executable
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'releasebuild/UniversalVideoPlayerPro.exe'
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 8
+          $p.Refresh()
+          if ($p.HasExited) {
+            Write-Error "UniversalVideoPlayerPro exited during startup. Exit code: $($p.ExitCode)"
+            exit 1
+          }
+          Write-Host "Player stayed running. MainWindowHandle=$($p.MainWindowHandle)"
+          Stop-Process -Id $p.Id -Force
+
+      - name: Create Store package layout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Remove-Item 'storepackage' -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path 'storepackage/Assets' -Force | Out-Null
+
+          Get-ChildItem 'releasebuild' -Force | Where-Object { $_.Extension -ne '.pdb' } | ForEach-Object {
+            Copy-Item $_.FullName -Destination 'storepackage' -Recurse -Force
+          }
+          Copy-Item 'UniversalVideoPlayerPro/store/AppxManifest.xml' 'storepackage/AppxManifest.xml' -Force
+
+          [xml]$manifest = Get-Content 'storepackage/AppxManifest.xml'
+          $ns = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
+          $ns.AddNamespace('f', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
+          $identity = $manifest.SelectSingleNode('/f:Package/f:Identity', $ns)
+          if ($identity.Name -ne 'MarksVisualSoftware.UniversalVideoPlayerPro') { throw "Identity Name mismatch: $($identity.Name)" }
+          if ($identity.Publisher -ne 'CN=126DA3AD-19F4-4631-B731-38897D05C7B0') { throw "Publisher mismatch: $($identity.Publisher)" }
+          if ($identity.Version -ne '1.0.0.0') { throw "Version mismatch: $($identity.Version)" }
+
+      - name: Generate Store logo assets
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.Drawing
+
+          function New-PlayerLogo {
+            param([string]$Path,[int]$Width,[int]$Height,[bool]$Wide=$false)
+            $bmp = New-Object System.Drawing.Bitmap($Width,$Height)
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            $g.Clear([System.Drawing.Color]::FromArgb(11,16,32))
+            $accent = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(56,189,248))
+            $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+
+            $iconSize = [Math]::Min($Height * 0.66, $Width * 0.66)
+            if ($Wide) { $iconSize = $Height * 0.64 }
+            $iconX = if ($Wide) { $Height * 0.18 } else { ($Width - $iconSize) / 2 }
+            $iconY = ($Height - $iconSize) / 2
+            $g.FillEllipse($accent,[float]$iconX,[float]$iconY,[float]$iconSize,[float]$iconSize)
+
+            $points = New-Object 'System.Drawing.PointF[]' 3
+            $points[0] = New-Object System.Drawing.PointF([float]($iconX+$iconSize*0.39),[float]($iconY+$iconSize*0.27))
+            $points[1] = New-Object System.Drawing.PointF([float]($iconX+$iconSize*0.39),[float]($iconY+$iconSize*0.73))
+            $points[2] = New-Object System.Drawing.PointF([float]($iconX+$iconSize*0.72),[float]($iconY+$iconSize*0.50))
+            $g.FillPolygon($white,$points)
+
+            if ($Wide) {
+              $font = New-Object System.Drawing.Font('Segoe UI Semibold',24,[System.Drawing.FontStyle]::Bold,[System.Drawing.GraphicsUnit]::Pixel)
+              $small = New-Object System.Drawing.Font('Segoe UI',14,[System.Drawing.FontStyle]::Regular,[System.Drawing.GraphicsUnit]::Pixel)
+              $textX = $iconX + $iconSize + 20
+              $g.DrawString('Universal Video',$font,$white,[float]$textX,43)
+              $g.DrawString('PLAYER PRO',$small,$accent,[float]$textX,78)
+              $font.Dispose(); $small.Dispose()
+            }
+
+            $bmp.Save($Path,[System.Drawing.Imaging.ImageFormat]::Png)
+            $accent.Dispose(); $white.Dispose(); $g.Dispose(); $bmp.Dispose()
+          }
+
+          New-PlayerLogo 'storepackage/Assets/StoreLogo.png' 50 50
+          New-PlayerLogo 'storepackage/Assets/Square44x44Logo.png' 44 44
+          New-PlayerLogo 'storepackage/Assets/Square150x150Logo.png' 150 150
+          New-PlayerLogo 'storepackage/Assets/Wide310x150Logo.png' 310 150 $true
+
+      - name: Build Microsoft Store MSIX
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $makeAppx = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $makeAppx) { throw 'MakeAppx.exe was not found.' }
+          Write-Host "Using $($makeAppx.FullName)"
+          & $makeAppx.FullName pack /d 'storepackage' /p 'UniversalVideoPlayerPro_1.0.0.0_x64.msix' /o
+          if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed with exit code $LASTEXITCODE" }
+
+      - name: Verify MSIX contents
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $makeAppx = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          Remove-Item 'verifymsix' -Recurse -Force -ErrorAction SilentlyContinue
+          & $makeAppx.FullName unpack /p 'UniversalVideoPlayerPro_1.0.0.0_x64.msix' /d 'verifymsix' /o
+          if ($LASTEXITCODE -ne 0) { throw "MSIX unpack verification failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path 'verifymsix/UniversalVideoPlayerPro.exe')) { throw 'Packaged EXE is missing.' }
+          if (-not (Test-Path 'verifymsix/AppxManifest.xml')) { throw 'AppxManifest.xml is missing.' }
+          if (-not (Test-Path 'verifymsix/Assets/Square150x150Logo.png')) { throw 'Store logo asset is missing.' }
+
+      - name: Create submission readme
+        shell: pwsh
+        run: |
+          @'
+          Universal Video Player Pro - Microsoft Store Submission
+          --------------------------------------------------------
+          Upload file: UniversalVideoPlayerPro_1.0.0.0_x64.msix
+          Version: 1.0.0.0
+          Architecture: x64
+          Package/Identity/Name: MarksVisualSoftware.UniversalVideoPlayerPro
+          Package/Identity/Publisher: CN=126DA3AD-19F4-4631-B731-38897D05C7B0
+          Package/Properties/PublisherDisplayName: Mark's Visual Software
+          Display name: Universal Video Player Pro
+          Minimum OS: Windows 10 version 2004 (10.0.19041.0)
+
+          This package is intentionally unsigned for Microsoft Store submission.
+          Microsoft Store signs MSIX packages after certification.
+
+          In Partner Center, open Universal Video Player Pro > Packages and upload the .msix file.
+          '@ | Set-Content 'STORE_SUBMISSION_README.txt' -Encoding UTF8
+
+      - name: Upload Microsoft Store submission package
+        uses: actions/upload-artifact@v4
+        with:
+          name: UniversalVideoPlayerPro-v1.0.0.0-MicrosoftStore
+          path: |
+            UniversalVideoPlayerPro_1.0.0.0_x64.msix
+            STORE_SUBMISSION_README.txt
+          if-no-files-found: error
+          retention-days: 14
