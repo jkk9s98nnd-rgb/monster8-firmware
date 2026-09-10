@@ -1,0 +1,104 @@
+name: Capture Universal Video Player Pro Current UI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - universal-video-player-pro-build
+    paths:
+      - '.github/workflows/capture-uvpp-current-ui.yml'
+
+jobs:
+  capture-current-ui:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout build branch
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore 'UniversalVideoPlayerPro/src/UniversalVideoPlayerPro.csproj' -r win-x64
+
+      - name: Build current v0.2 UI
+        shell: pwsh
+        run: dotnet build 'UniversalVideoPlayerPro/src/UniversalVideoPlayerPro.csproj' -c Release -r win-x64 -p:Platform=x64 -p:SelfContained=true -p:WindowsAppSDKSelfContained=true --no-restore -o 'releasebuild'
+
+      - name: Launch actual application
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'releasebuild/UniversalVideoPlayerPro.exe'
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 10
+          $p.Refresh()
+          if ($p.HasExited) {
+            Write-Error "Application exited before screenshot. Exit code: $($p.ExitCode)"
+            exit 1
+          }
+          if ($p.MainWindowHandle -eq 0) {
+            Write-Error "Application is running but has no visible main window."
+            Stop-Process -Id $p.Id -Force
+            exit 1
+          }
+          "UVPP_PID=$($p.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UVPP_HWND=$($p.MainWindowHandle)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Capture actual application window
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class Win32Capture {
+              [StructLayout(LayoutKind.Sequential)]
+              public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+              [DllImport("user32.dll")]
+              public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+              [DllImport("user32.dll")]
+              public static extern bool SetForegroundWindow(IntPtr hWnd);
+              [DllImport("user32.dll")]
+              public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+          }
+          "@
+
+          $hwnd = [IntPtr]([Int64]$env:UVPP_HWND)
+          [Win32Capture]::ShowWindow($hwnd, 9) | Out-Null
+          [Win32Capture]::SetForegroundWindow($hwnd) | Out-Null
+          Start-Sleep -Seconds 2
+
+          $rect = New-Object Win32Capture+RECT
+          if (-not [Win32Capture]::GetWindowRect($hwnd, [ref]$rect)) {
+            throw 'GetWindowRect failed.'
+          }
+          $width = $rect.Right - $rect.Left
+          $height = $rect.Bottom - $rect.Top
+          if ($width -lt 800 -or $height -lt 500) {
+            throw "Unexpected window size ${width}x${height}."
+          }
+
+          $bitmap = New-Object System.Drawing.Bitmap $width, $height
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+          $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
+          $graphics.Dispose()
+          $out = Join-Path $PWD 'UniversalVideoPlayerPro_Current_v0.2_Actual_UI.png'
+          $bitmap.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
+          $bitmap.Dispose()
+          Write-Host "Captured actual UI: $out (${width}x${height})"
+
+          Stop-Process -Id ([int]$env:UVPP_PID) -Force
+
+      - name: Upload actual screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: UniversalVideoPlayerPro-Current-v0.2-Actual-UI
+          path: UniversalVideoPlayerPro_Current_v0.2_Actual_UI.png
+          if-no-files-found: error
+          retention-days: 14
